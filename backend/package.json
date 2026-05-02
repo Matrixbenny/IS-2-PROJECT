@@ -1,0 +1,10 @@
+{
+  "name": "kenya-watch-backend",
+  "version": "1.0.0",
+  "description": "Backend for Kenya Watch anti-corruption platform",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {}
+}
