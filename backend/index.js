@@ -24,6 +24,16 @@ app.post('/reports', async (req, res) => {
   }
 });
 
+// GET /reports - List all corruption reports
+app.get('/reports', async (req, res) => {
+  try {
+    const reports = await Report.find().sort({ createdAt: -1 });
+    res.json(reports);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Connect to MongoDB
 mongoose.connect(MONGO_URI)
   .then(() => {
