@@ -1,7 +1,12 @@
 
+
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import './App.css';
+import { BrowserRouter as Router, Routes, Route, Link, useNavigate } from 'react-router-dom';
+import Home from './pages/Home';
+import SubmitReport from './pages/SubmitReport';
+import About from './pages/About';
 
 function App() {
   const [reports, setReports] = useState([]);
@@ -63,44 +68,64 @@ function App() {
   };
 
   return (
-    <div className="App">
-      <header className="kw-header">
-        <div className="kw-logo-circle">
-          <span role="img" aria-label="shield" className="kw-logo-emoji">🛡️</span>
-        </div>
-        <div className="kw-branding">
-          <h1>Kenya Watch</h1>
-          <div className="kw-tagline">A Trusted Platform to Report and Track Corruption</div>
-        </div>
-      </header>
-      <form className="report-form" onSubmit={handleSubmit}>
-        <input name="title" value={form.title} onChange={handleChange} placeholder="Title" required />
-        <textarea name="description" value={form.description} onChange={handleChange} placeholder="Description" required />
-        <input name="location" value={form.location} onChange={handleChange} placeholder="Location" />
-        <input name="evidenceUrls" value={form.evidenceUrls} onChange={handleChange} placeholder="Evidence URLs (comma separated)" />
-        <input name="ageGroup" value={form.ageGroup} onChange={handleChange} placeholder="Age Group" />
-        <input name="gender" value={form.gender} onChange={handleChange} placeholder="Gender" />
-        <input name="occupation" value={form.occupation} onChange={handleChange} placeholder="Occupation" />
-        <button type="submit" disabled={loading}>{loading ? 'Submitting...' : 'Submit Report'}</button>
-        {error && <div className="error">{error}</div>}
-        {success && <div className="success">{success}</div>}
-      </form>
-      <h2>All Reports</h2>
-      <div className="reports-list">
-        {reports.length === 0 && <div>No reports found.</div>}
-        {reports.map((r) => (
-          <div className="report-card" key={r._id}>
-            <h3>{r.title}</h3>
-            <p>{r.description}</p>
-            <div><b>Location:</b> {r.location}</div>
-            <div><b>Evidence:</b> {r.evidenceUrls && r.evidenceUrls.join(', ')}</div>
-            <div><b>Demographic:</b> {r.demographic && `${r.demographic.ageGroup || ''} ${r.demographic.gender || ''} ${r.demographic.occupation || ''}`}</div>
-            <div><b>Status:</b> {r.status}</div>
-            <div><b>Date:</b> {new Date(r.createdAt).toLocaleString()}</div>
+    <Router>
+      <div className="App">
+        <header className="kw-header">
+          <div className="kw-logo-circle">
+            <span role="img" aria-label="shield" className="kw-logo-emoji">🛡️</span>
           </div>
-        ))}
+          <div className="kw-branding">
+            <h1>Kenya Watch</h1>
+            <div className="kw-tagline">A Trusted Platform to Report and Track Corruption</div>
+          </div>
+        </header>
+        <nav className="kw-nav">
+          <Link to="/" className="kw-nav-link">Home</Link>
+          <Link to="/submit" className="kw-nav-link">Submit Report</Link>
+          <Link to="/about" className="kw-nav-link">About</Link>
+        </nav>
+        <Routes>
+          <Route path="/" element={
+            <>
+              <Home />
+              <h2>All Reports</h2>
+              <div className="reports-list">
+                {reports.length === 0 && <div>No reports found.</div>}
+                {reports.map((r) => (
+                  <div className="report-card" key={r._id}>
+                    <h3>{r.title}</h3>
+                    <p>{r.description}</p>
+                    <div><b>Location:</b> {r.location}</div>
+                    <div><b>Evidence:</b> {r.evidenceUrls && r.evidenceUrls.join(', ')}</div>
+                    <div><b>Demographic:</b> {r.demographic && `${r.demographic.ageGroup || ''} ${r.demographic.gender || ''} ${r.demographic.occupation || ''}`}</div>
+                    <div><b>Status:</b> {r.status}</div>
+                    <div><b>Date:</b> {new Date(r.createdAt).toLocaleString()}</div>
+                  </div>
+                ))}
+              </div>
+            </>
+          } />
+          <Route path="/submit" element={
+            <>
+              <SubmitReport />
+              <form className="report-form" onSubmit={handleSubmit}>
+                <input name="title" value={form.title} onChange={handleChange} placeholder="Title" required />
+                <textarea name="description" value={form.description} onChange={handleChange} placeholder="Description" required />
+                <input name="location" value={form.location} onChange={handleChange} placeholder="Location" />
+                <input name="evidenceUrls" value={form.evidenceUrls} onChange={handleChange} placeholder="Evidence URLs (comma separated)" />
+                <input name="ageGroup" value={form.ageGroup} onChange={handleChange} placeholder="Age Group" />
+                <input name="gender" value={form.gender} onChange={handleChange} placeholder="Gender" />
+                <input name="occupation" value={form.occupation} onChange={handleChange} placeholder="Occupation" />
+                <button type="submit" disabled={loading}>{loading ? 'Submitting...' : 'Submit Report'}</button>
+                {error && <div className="error">{error}</div>}
+                {success && <div className="success">{success}</div>}
+              </form>
+            </>
+          } />
+          <Route path="/about" element={<About />} />
+        </Routes>
       </div>
-    </div>
+    </Router>
   );
 }
 
