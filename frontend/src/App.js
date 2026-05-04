@@ -88,18 +88,28 @@ function App() {
           <Route path="/" element={
             <>
               <Home />
-              <h2>All Reports</h2>
+              <div className="kw-reports-summary">
+                <h2>All Reports</h2>
+                <div className="kw-reports-meta">{reports.length} report{reports.length === 1 ? '' : 's'} submitted</div>
+              </div>
               <div className="reports-list">
-                {reports.length === 0 && <div>No reports found.</div>}
+                {reports.length === 0 && (
+                  <div className="kw-empty-state">
+                    <span role="img" aria-label="no reports" className="kw-empty-emoji">📭</span>
+                    <div>No reports found. Be the first to submit a report!</div>
+                  </div>
+                )}
                 {reports.map((r) => (
-                  <div className="report-card" key={r._id}>
-                    <h3>{r.title}</h3>
+                  <div className="report-card kw-pro-card" key={r._id}>
+                    <div className="kw-pro-card-row">
+                      <h3>{r.title}</h3>
+                      <span className="kw-status-badge">{r.status}</span>
+                    </div>
                     <p>{r.description}</p>
-                    <div><b>Location:</b> {r.location}</div>
-                    <div><b>Evidence:</b> {r.evidenceUrls && r.evidenceUrls.join(', ')}</div>
-                    <div><b>Demographic:</b> {r.demographic && `${r.demographic.ageGroup || ''} ${r.demographic.gender || ''} ${r.demographic.occupation || ''}`}</div>
-                    <div><b>Status:</b> {r.status}</div>
-                    <div><b>Date:</b> {new Date(r.createdAt).toLocaleString()}</div>
+                    <div className="kw-pro-meta"><b>Location:</b> {r.location || <span className="kw-faded">(not specified)</span>}</div>
+                    <div className="kw-pro-meta"><b>Evidence:</b> {r.evidenceUrls && r.evidenceUrls.length > 0 ? r.evidenceUrls.join(', ') : <span className="kw-faded">None</span>}</div>
+                    <div className="kw-pro-meta"><b>Demographic:</b> {r.demographic && (r.demographic.ageGroup || r.demographic.gender || r.demographic.occupation) ? `${r.demographic.ageGroup || ''} ${r.demographic.gender || ''} ${r.demographic.occupation || ''}` : <span className="kw-faded">(not specified)</span>}</div>
+                    <div className="kw-pro-meta"><b>Date:</b> {new Date(r.createdAt).toLocaleString()}</div>
                   </div>
                 ))}
               </div>
