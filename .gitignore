@@ -1,6 +1,6 @@
-node_modules/
-build/
-dist/
-.env
-.DS_Store
-npm-debug.log*
+# Ignore everything by default - only the IS story doc is tracked in this repo for now.
+/*
+!/.gitignore
+!/Docs/
+/Docs/*
+!/Docs/my IS story.md
