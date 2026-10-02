@@ -7,6 +7,7 @@ const { upload } = require('../middleware/upload');
 const { storeEvidenceFile } = require('../utils/evidence');
 const { getBucket } = require('../utils/gridfs');
 const { requireAuth, requireRole } = require('../middleware/auth');
+const { AGENCIES, suggestAgencyForCategory } = require('../utils/agencies');
 
 const router = express.Router();
 
@@ -38,6 +39,11 @@ function classifyInBackground(reportId, { title, description, evidenceCount }) {
 // GET /api/reports/categories - shared source of truth so the frontend form never hardcodes this.
 router.get('/categories', (req, res) => {
   res.json({ categories: CATEGORIES, fields: CATEGORY_FIELDS });
+});
+
+// GET /api/reports/agencies - the Agency/Institution referral list (decision #7).
+router.get('/agencies', requireRole('reviewer', 'admin'), (req, res) => {
+  res.json({ agencies: AGENCIES });
 });
 
 // POST /api/reports - submit a new report, Path A (anonymous) or Path B (logged in) side by side (decision #3).
@@ -147,11 +153,15 @@ router.get('/mine', requireAuth, async (req, res) => {
   }
 });
 
+function withSuggestedAgency(report) {
+  return { ...report.toReviewerTier(), suggestedAgency: suggestAgencyForCategory(report.reportedCategory) };
+}
+
 // GET /api/reports/queue - Reviewer/Admin shared triage queue, reviewer tier (decision #24/#25).
 router.get('/queue', requireRole('reviewer', 'admin'), async (req, res) => {
   try {
     const reports = await Report.find().sort({ createdAt: -1 }).limit(200);
-    return res.json(reports.map((r) => r.toReviewerTier()));
+    return res.json(reports.map(withSuggestedAgency));
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
@@ -183,7 +193,7 @@ router.get('/:id', async (req, res) => {
 
     const isOwner = req.user && report.user && report.user.toString() === req.user._id.toString();
     const isStaff = req.user && ['reviewer', 'admin'].includes(req.user.role);
-    if (isStaff) return res.json(report.toReviewerTier());
+    if (isStaff) return res.json(withSuggestedAgency(report));
     if (isOwner) return res.json(report.toDeepTier());
     return res.json(report.toGeneralTier());
   } catch (err) {
@@ -201,7 +211,24 @@ router.post('/:id/claim', requireRole('reviewer', 'admin'), async (req, res) => 
     }
     report.claimedBy = req.user._id;
     await report.save();
-    return res.json(report.toReviewerTier());
+    return res.json(withSuggestedAgency(report));
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/reports/:id/refer - Reviewer/Admin refers a case to an Agency/Institution (decision #7).
+router.post('/:id/refer', requireRole('reviewer', 'admin'), async (req, res) => {
+  try {
+    const { agency, referenceNumber, notes } = req.body;
+    if (!agency) return res.status(400).json({ error: 'An agency is required' });
+
+    const report = await Report.findById(req.params.id);
+    if (!report) return res.status(404).json({ error: 'Report not found' });
+
+    report.agencyReferral = { agency, referenceNumber: referenceNumber || null, notes: notes || null };
+    await report.save();
+    return res.json(withSuggestedAgency(report));
   } catch (err) {
     return res.status(400).json({ error: err.message });
   }
@@ -227,7 +254,7 @@ router.patch('/:id/status', requireRole('reviewer', 'admin'), async (req, res) =
     }
     report.statusHistory.push({ status, changedAt: new Date(), changedBy: req.user._id });
     await report.save();
-    return res.json(report.toReviewerTier());
+    return res.json(withSuggestedAgency(report));
   } catch (err) {
     return res.status(400).json({ error: err.message });
   }
