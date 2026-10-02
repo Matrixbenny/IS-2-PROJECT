@@ -1,6 +1,16 @@
-# Ignore everything by default - only the IS story doc is tracked in this repo for now.
+# Ignore everything by default - only the story doc + actual app code are tracked.
 /*
 !/.gitignore
 !/Docs/
 /Docs/*
 !/Docs/my IS story.md
+!/backend/
+!/frontend/
+
+# ...except build artifacts, dependencies and secrets inside those app folders.
+node_modules/
+build/
+dist/
+.env
+backend/data/
+backend/cookies.txt
