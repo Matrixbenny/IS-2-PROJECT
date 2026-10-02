@@ -7,6 +7,7 @@ const { attachUser } = require('./middleware/auth');
 const authRoutes = require('./routes/auth.routes');
 const reportRoutes = require('./routes/report.routes');
 const evidenceRoutes = require('./routes/evidence.routes');
+const userRoutes = require('./routes/users.routes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -23,6 +24,7 @@ app.get('/', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/evidence', evidenceRoutes);
+app.use('/api/users', userRoutes);
 
 // Keep the old unauthenticated routes working briefly isn't needed - the frontend is being updated alongside this.
 
