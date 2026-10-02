@@ -115,6 +115,35 @@
   margin-bottom: 10px;
 }
 
+/* Reviewer queue + case detail */
+.kw-case-detail {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed #c7d4e3;
+}
+.kw-case-form {
+  margin-top: 14px;
+  padding: 12px;
+  background: #f4f7fb;
+  border-radius: 8px;
+}
+.kw-case-form h4 {
+  margin-top: 0;
+}
+
+/* Manage users table */
+.kw-users-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+}
+.kw-users-table th, .kw-users-table td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid #e0eafc;
+}
+
+
 .kw-pro-meta {
   color: #3a4a5d;
   font-size: 0.98rem;

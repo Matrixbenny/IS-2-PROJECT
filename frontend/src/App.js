@@ -11,12 +11,16 @@ import MyReports from './pages/MyReports';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import About from './pages/About';
+import ReviewerQueue from './pages/ReviewerQueue';
+import ManageUsers from './pages/ManageUsers';
 
 function NavAuthLinks() {
   const { user, logout } = useAuth();
   if (user) {
     return (
       <>
+        {['reviewer', 'admin'].includes(user.role) && <Link to="/reviewer-queue" className="kw-nav-link">Reviewer Queue</Link>}
+        {user.role === 'admin' && <Link to="/manage-users" className="kw-nav-link">Manage Users</Link>}
         <Link to="/my-reports" className="kw-nav-link">My Reports ({user.name})</Link>
         <button type="button" className="kw-nav-link kw-nav-button" onClick={logout}>Log Out</button>
       </>
@@ -56,6 +60,8 @@ function App() {
             <Route path="/submit" element={<SubmitReport />} />
             <Route path="/track" element={<TrackReport />} />
             <Route path="/my-reports" element={<MyReports />} />
+            <Route path="/reviewer-queue" element={<ReviewerQueue />} />
+            <Route path="/manage-users" element={<ManageUsers />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             <Route path="/about" element={<About />} />
