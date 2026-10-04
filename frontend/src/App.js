@@ -1,76 +1,74 @@
-
-
 import React from 'react';
 import './App.css';
-import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
-import { AuthProvider, useAuth } from './context/AuthContext';
+import { BrowserRouter as Router, Routes, Route, NavLink } from 'react-router-dom';
 import Home from './pages/Home';
 import SubmitReport from './pages/SubmitReport';
-import TrackReport from './pages/TrackReport';
-import MyReports from './pages/MyReports';
+import About from './pages/About';
 import Login from './pages/Login';
 import Register from './pages/Register';
-import About from './pages/About';
-import ReviewerQueue from './pages/ReviewerQueue';
-import ManageUsers from './pages/ManageUsers';
+import TrackReport from './pages/TrackReport';
+import { AuthProvider, useAuth } from './context/AuthContext';
 
-function NavAuthLinks() {
+function HeaderUser() {
   const { user, logout } = useAuth();
-  if (user) {
+  if (!user) {
     return (
-      <>
-        {['reviewer', 'admin'].includes(user.role) && <Link to="/reviewer-queue" className="kw-nav-link">Reviewer Queue</Link>}
-        {user.role === 'admin' && <Link to="/manage-users" className="kw-nav-link">Manage Users</Link>}
-        <Link to="/my-reports" className="kw-nav-link">My Reports ({user.name})</Link>
-        <button type="button" className="kw-nav-link kw-nav-button" onClick={logout}>Log Out</button>
-      </>
+      <div className="kw-header-user">
+        <NavLink to="/login" className="kw-nav-link kw-nav-cta">Sign In</NavLink>
+      </div>
     );
   }
   return (
-    <>
-      <Link to="/login" className="kw-nav-link">Log In</Link>
-      <Link to="/register" className="kw-nav-link">Register</Link>
-    </>
+    <div className="kw-header-user">
+      Signed in as <strong>{user.name}</strong> ({user.role})
+      <div>
+        <button type="button" className="kw-btn kw-btn-secondary" style={{ marginTop: 6, padding: '6px 14px', fontSize: '0.85rem' }} onClick={logout}>
+          Sign out
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function AppShell() {
+  return (
+    <Router>
+      <div className="App">
+        <header className="kw-header">
+          <div className="kw-logo-circle">
+            <span role="img" aria-label="shield" className="kw-logo-emoji">🛡️</span>
+          </div>
+          <div className="kw-branding">
+            <h1>Kenya Watch</h1>
+            <div className="kw-tagline">A Trusted Platform to Report and Track Corruption</div>
+          </div>
+          <HeaderUser />
+        </header>
+        <nav className="kw-nav">
+          <NavLink to="/" end className="kw-nav-link">Home</NavLink>
+          <NavLink to="/submit" className="kw-nav-link">Submit Report</NavLink>
+          <NavLink to="/track" className="kw-nav-link">Track Report</NavLink>
+          <NavLink to="/about" className="kw-nav-link">About</NavLink>
+        </nav>
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/submit" element={<SubmitReport />} />
+          <Route path="/track" element={<TrackReport />} />
+          <Route path="/about" element={<About />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+        </Routes>
+      </div>
+    </Router>
   );
 }
 
 function App() {
   return (
     <AuthProvider>
-      <Router>
-        <div className="App">
-          <header className="kw-header">
-            <div className="kw-logo-circle">
-              <span role="img" aria-label="shield" className="kw-logo-emoji">🛡️</span>
-            </div>
-            <div className="kw-branding">
-              <h1>Kenya Watch</h1>
-              <div className="kw-tagline">A Trusted Platform to Report and Track Corruption</div>
-            </div>
-          </header>
-          <nav className="kw-nav">
-            <Link to="/" className="kw-nav-link">Home</Link>
-            <Link to="/submit" className="kw-nav-link">Submit Report</Link>
-            <Link to="/track" className="kw-nav-link">Track Report</Link>
-            <Link to="/about" className="kw-nav-link">About</Link>
-            <NavAuthLinks />
-          </nav>
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/submit" element={<SubmitReport />} />
-            <Route path="/track" element={<TrackReport />} />
-            <Route path="/my-reports" element={<MyReports />} />
-            <Route path="/reviewer-queue" element={<ReviewerQueue />} />
-            <Route path="/manage-users" element={<ManageUsers />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            <Route path="/about" element={<About />} />
-          </Routes>
-        </div>
-      </Router>
+      <AppShell />
     </AuthProvider>
   );
 }
-
 
 export default App;

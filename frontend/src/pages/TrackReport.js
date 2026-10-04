@@ -1,9 +1,13 @@
 import React, { useState } from 'react';
-import { apiGet } from '../api';
+import api from '../api';
+
+function statusClass(status) {
+  return `status-${status.toLowerCase().replace(/\s+/g, '-')}`;
+}
 
 function TrackReport() {
-  const [refInput, setRefInput] = useState('');
-  const [keyInput, setKeyInput] = useState('');
+  const [ref, setRef] = useState('');
+  const [key, setKey] = useState('');
   const [report, setReport] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -14,10 +18,10 @@ function TrackReport() {
     setReport(null);
     setLoading(true);
     try {
-      const data = await apiGet(`/reports/track?ref=${encodeURIComponent(refInput.trim())}&key=${encodeURIComponent(keyInput.trim())}`);
-      setReport(data);
+      const res = await api.get('/reports/track', { params: { ref: ref.trim(), key: key.trim() } });
+      setReport(res.data);
     } catch (err) {
-      setError(err.message || 'Could not find a matching report');
+      setError(err.response?.data?.error || 'Lookup failed');
     }
     setLoading(false);
   };
@@ -25,37 +29,40 @@ function TrackReport() {
   return (
     <div>
       <h2>Track Your Report</h2>
-      <div className="kw-helper">Enter the Tracking Reference and Access Key you were given when you submitted your report.</div>
-      <form className="kw-pro-form" onSubmit={handleSubmit}>
+      <div className="kw-helper" style={{ marginBottom: 14 }}>
+        Enter the Tracking Reference and Access Key you received when you submitted your report.
+      </div>
+      <form className="report-form kw-pro-form" onSubmit={handleSubmit}>
         <div className="kw-form-section">
-          <label htmlFor="ref">Tracking Reference<span className="kw-required">*</span></label>
-          <input id="ref" value={refInput} onChange={(e) => setRefInput(e.target.value)} placeholder="KW-XXXXXX" required />
+          <label htmlFor="ref">Tracking Reference</label>
+          <input id="ref" value={ref} onChange={(e) => setRef(e.target.value)} placeholder="KW-XXXXXX" required />
         </div>
         <div className="kw-form-section">
-          <label htmlFor="key">Access Key<span className="kw-required">*</span></label>
-          <input id="key" value={keyInput} onChange={(e) => setKeyInput(e.target.value)} placeholder="e.g. purple-tiger-lemon-forest" required />
+          <label htmlFor="key">Access Key</label>
+          <input id="key" value={key} onChange={(e) => setKey(e.target.value)} placeholder="purple-tiger-lemon-forest" required />
         </div>
         <button type="submit" disabled={loading}>{loading ? 'Looking up...' : 'Check Status'}</button>
         {error && <div className="error">{error}</div>}
       </form>
 
       {report && (
-        <div className="report-card kw-pro-card">
+        <div className="kw-page-card">
           <div className="kw-pro-card-row">
-            <h3>{report.title}</h3>
-            <span className="kw-status-badge">{report.status}</span>
+            <h3 style={{ margin: 0 }}>{report.title}</h3>
+            <span className={`kw-status-badge ${statusClass(report.status)}`}>{report.status}</span>
           </div>
+          <div className="kw-pro-meta"><span className="kw-tracking-chip">{report.trackingReference}</span></div>
           <div className="kw-pro-meta"><b>Category:</b> {report.reportedCategory}</div>
-          <div className="kw-pro-meta"><b>Location:</b> {report.county}, {report.subCounty}</div>
+          <div className="kw-pro-meta"><b>Location:</b> {report.subCounty}, {report.county}</div>
           <div className="kw-pro-meta"><b>Description:</b> {report.description}</div>
-          <div className="kw-pro-meta"><b>Evidence:</b> {report.evidence.length > 0 ? `${report.evidence.length} file(s) attached` : <span className="kw-faded">None</span>}</div>
+          <div className="kw-pro-meta"><b>Submitted:</b> {new Date(report.createdAt).toLocaleString()}</div>
           {report.resolutionNote && (
             <div className="kw-pro-meta"><b>Resolution:</b> {report.resolutionNote} (Ref: {report.resolutionReference})</div>
           )}
-          <div className="kw-pro-meta"><b>Status History:</b></div>
+          <div className="kw-pro-meta"><b>Status history:</b></div>
           <ul>
-            {report.statusHistory.map((h) => (
-              <li key={h._id}>{h.status} - {new Date(h.changedAt).toLocaleString()}</li>
+            {report.statusHistory.map((h, i) => (
+              <li key={i} className="kw-pro-meta">{h.status} - {new Date(h.changedAt).toLocaleString()}</li>
             ))}
           </ul>
         </div>
