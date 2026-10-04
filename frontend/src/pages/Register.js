@@ -20,41 +20,43 @@ function Register() {
     setLoading(true);
     try {
       await register(form);
-      navigate('/my-reports');
+      navigate('/');
     } catch (err) {
-      setError(err.message || 'Registration failed');
+      setError(err.response?.data?.error || 'Registration failed');
     }
     setLoading(false);
   };
 
   return (
-    <div className="kw-auth-page">
-      <form className="kw-pro-form" onSubmit={handleSubmit}>
-        <h2>Create an Account</h2>
-        <div className="kw-helper">Optional - lets you privately track your own reports under "My Reports" instead of using a Tracking Reference and Access Key.</div>
+    <div className="kw-auth-card">
+      <h2>Create an account</h2>
+      <div className="kw-helper" style={{ marginBottom: 16 }}>
+        Optional - you can also report fully anonymously without an account from the Submit Report page.
+      </div>
+      <form className="report-form" onSubmit={handleSubmit}>
         <div className="kw-form-section">
-          <label htmlFor="name">Full name<span className="kw-required">*</span></label>
+          <label htmlFor="name">Full name</label>
           <input id="name" name="name" value={form.name} onChange={handleChange} required />
         </div>
         <div className="kw-form-section">
-          <label htmlFor="email">Email<span className="kw-required">*</span></label>
+          <label htmlFor="email">Email</label>
           <input id="email" name="email" type="email" value={form.email} onChange={handleChange} required />
         </div>
         <div className="kw-form-section">
-          <label htmlFor="password">Password<span className="kw-required">*</span></label>
+          <label htmlFor="password">Password</label>
           <input id="password" name="password" type="password" minLength={8} value={form.password} onChange={handleChange} required />
           <div className="kw-helper">At least 8 characters.</div>
         </div>
-        <div className="kw-form-section">
-          <label>
-            <input type="checkbox" name="emailNotificationsOptIn" checked={form.emailNotificationsOptIn} onChange={handleChange} />
-            {' '}Email me when my report status changes
-          </label>
+        <div className="kw-form-section" style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <input id="emailNotificationsOptIn" name="emailNotificationsOptIn" type="checkbox" style={{ width: 'auto' }} checked={form.emailNotificationsOptIn} onChange={handleChange} />
+          <label htmlFor="emailNotificationsOptIn" style={{ marginBottom: 0 }}>Email me about status changes on my reports</label>
         </div>
         <button type="submit" disabled={loading}>{loading ? 'Creating account...' : 'Register'}</button>
         {error && <div className="error">{error}</div>}
-        <div className="kw-helper">Already have an account? <Link to="/login">Log in</Link>.</div>
       </form>
+      <div className="kw-auth-switch">
+        Already have an account? <Link to="/login">Sign in</Link>
+      </div>
     </div>
   );
 }

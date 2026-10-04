@@ -17,30 +17,31 @@ function Login() {
     setLoading(true);
     try {
       await login(form.email, form.password);
-      navigate('/my-reports');
+      navigate('/');
     } catch (err) {
-      setError(err.message || 'Login failed');
+      setError(err.response?.data?.error || 'Login failed');
     }
     setLoading(false);
   };
 
   return (
-    <div className="kw-auth-page">
-      <form className="kw-pro-form" onSubmit={handleSubmit}>
-        <h2>Log In</h2>
-        <div className="kw-helper">Optional citizen account (Path B) - most reporters never need this. You can always report anonymously instead.</div>
+    <div className="kw-auth-card">
+      <h2>Welcome back</h2>
+      <form className="report-form" onSubmit={handleSubmit}>
         <div className="kw-form-section">
-          <label htmlFor="email">Email<span className="kw-required">*</span></label>
+          <label htmlFor="email">Email</label>
           <input id="email" name="email" type="email" value={form.email} onChange={handleChange} required />
         </div>
         <div className="kw-form-section">
-          <label htmlFor="password">Password<span className="kw-required">*</span></label>
+          <label htmlFor="password">Password</label>
           <input id="password" name="password" type="password" value={form.password} onChange={handleChange} required />
         </div>
-        <button type="submit" disabled={loading}>{loading ? 'Logging in...' : 'Log In'}</button>
+        <button type="submit" disabled={loading}>{loading ? 'Signing in...' : 'Sign In'}</button>
         {error && <div className="error">{error}</div>}
-        <div className="kw-helper">No account? <Link to="/register">Register here</Link>.</div>
       </form>
+      <div className="kw-auth-switch">
+        Don't have an account? <Link to="/register">Register</Link>
+      </div>
     </div>
   );
 }

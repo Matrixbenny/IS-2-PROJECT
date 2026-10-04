@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { apiGet, apiPost } from '../api';
+import api from '../api';
 
 const AuthContext = createContext(null);
 
@@ -9,31 +9,33 @@ export function AuthProvider({ children }) {
 
   const refresh = useCallback(async () => {
     try {
-      const { user: me } = await apiGet('/auth/me');
-      setUser(me);
-    } catch (_) {
+      const res = await api.get('/auth/me');
+      setUser(res.data.user);
+    } catch (err) {
       setUser(null);
     } finally {
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => { refresh(); }, [refresh]);
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
 
   const login = async (email, password) => {
-    const { user: loggedIn } = await apiPost('/auth/login', { email, password });
-    setUser(loggedIn);
-    return loggedIn;
+    const res = await api.post('/auth/login', { email, password });
+    setUser(res.data.user);
+    return res.data.user;
   };
 
   const register = async (payload) => {
-    const { user: created } = await apiPost('/auth/register', payload);
-    setUser(created);
-    return created;
+    const res = await api.post('/auth/register', payload);
+    setUser(res.data.user);
+    return res.data.user;
   };
 
   const logout = async () => {
-    await apiPost('/auth/logout', {});
+    await api.post('/auth/logout');
     setUser(null);
   };
 
