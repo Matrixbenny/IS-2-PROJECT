@@ -1,17 +1,25 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { apiGet, apiPostForm } from '../api';
+import React, { useEffect, useState } from 'react';
+import api from '../api';
 import { useAuth } from '../context/AuthContext';
 import KENYA_COUNTIES from '../data/kenyaCounties';
 
-const AGE_GROUPS = ['Under 18', '18-24', '25-34', '35-44', '45-54', '55-64', '65+'];
+const emptyForm = {
+  title: '',
+  reportedCategory: '',
+  description: '',
+  county: '',
+  subCounty: '',
+  incidentDateTime: '',
+  ageGroup: '',
+  gender: '',
+  occupation: ''
+};
 
 function SubmitReport() {
   const { user } = useAuth();
-  const [meta, setMeta] = useState({ categories: [], fields: {} });
-  const [form, setForm] = useState({
-    title: '', reportedCategory: '', description: '', county: '', subCounty: '',
-    incidentDateTime: '', ageGroup: '', gender: '', occupation: ''
-  });
+  const [categories, setCategories] = useState([]);
+  const [fieldsByCategory, setFieldsByCategory] = useState({});
+  const [form, setForm] = useState(emptyForm);
   const [categoryDetails, setCategoryDetails] = useState({});
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -19,11 +27,13 @@ function SubmitReport() {
   const [result, setResult] = useState(null);
 
   useEffect(() => {
-    apiGet('/reports/categories').then(setMeta).catch(() => setError('Could not load report categories - is the backend running?'));
+    api.get('/reports/categories')
+      .then((res) => {
+        setCategories(res.data.categories);
+        setFieldsByCategory(res.data.fields);
+      })
+      .catch(() => setError('Could not load report categories. Is the backend running?'));
   }, []);
-
-  const subCounties = useMemo(() => KENYA_COUNTIES[form.county] || [], [form.county]);
-  const activeFields = meta.fields[form.reportedCategory] || [];
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -38,58 +48,66 @@ function SubmitReport() {
     setCategoryDetails({ ...categoryDetails, [fieldName]: value });
   };
 
-  const handleCategoryChange = (e) => {
-    setForm({ ...form, reportedCategory: e.target.value });
-    setCategoryDetails({});
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setResult(null);
     setLoading(true);
     try {
-      const formData = new FormData();
-      formData.append('title', form.title);
-      formData.append('reportedCategory', form.reportedCategory);
-      formData.append('description', form.description);
-      formData.append('county', form.county);
-      formData.append('subCounty', form.subCounty);
-      if (form.incidentDateTime) formData.append('incidentDateTime', form.incidentDateTime);
-      if (form.ageGroup) formData.append('ageGroup', form.ageGroup);
-      if (form.gender) formData.append('gender', form.gender);
-      if (form.occupation) formData.append('occupation', form.occupation);
-      formData.append('categorySpecificDetails', JSON.stringify(categoryDetails));
-      files.forEach((file) => formData.append('evidence', file));
+      const payload = new FormData();
+      payload.append('title', form.title);
+      payload.append('reportedCategory', form.reportedCategory);
+      payload.append('description', form.description);
+      payload.append('county', form.county);
+      payload.append('subCounty', form.subCounty);
+      if (form.incidentDateTime) payload.append('incidentDateTime', form.incidentDateTime);
+      if (form.ageGroup) payload.append('ageGroup', form.ageGroup);
+      if (form.gender) payload.append('gender', form.gender);
+      if (form.occupation) payload.append('occupation', form.occupation);
+      payload.append('categorySpecificDetails', JSON.stringify(categoryDetails));
+      files.forEach((f) => payload.append('evidence', f));
 
-      const res = await apiPostForm('/reports', formData);
-      setResult(res);
-      setForm({ title: '', reportedCategory: '', description: '', county: '', subCounty: '', incidentDateTime: '', ageGroup: '', gender: '', occupation: '' });
+      const res = await api.post('/reports', payload, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      setResult(res.data);
+      setForm(emptyForm);
       setCategoryDetails({});
       setFiles([]);
     } catch (err) {
-      setError(err.message || 'Failed to submit report');
+      setError(err.response?.data?.error || 'Failed to submit report');
     }
     setLoading(false);
   };
 
+  const subCounties = form.county ? (KENYA_COUNTIES[form.county] || []) : [];
+  const activeFields = fieldsByCategory[form.reportedCategory] || [];
+
   if (result) {
     return (
-      <div className="kw-confirmation kw-pro-form">
-        <h2>Report Submitted</h2>
-        <p>Your report has been received. Please save the details below - they are the only way to check back on this case.</p>
-        <div className="kw-tracking-box">
-          <div><b>Tracking Reference:</b> <span className="kw-mono">{result.trackingReference}</span></div>
+      <div>
+        <h2>Submit a Corruption Report</h2>
+        <div className="kw-confirm-panel">
+          <h3>Report submitted</h3>
+          <p>Save these details now - they are the only way to check your case status later.</p>
+          <div className="kw-helper" style={{ color: '#cbd5e1' }}>Tracking Reference</div>
+          <div className="kw-confirm-value">{result.trackingReference}</div>
           {result.accessKey && (
             <>
-              <div><b>Access Key:</b> <span className="kw-mono">{result.accessKey}</span></div>
-              <div className="kw-helper">{result.accessKeyWarning}</div>
+              <div className="kw-helper" style={{ color: '#cbd5e1' }}>Access Key</div>
+              <div className="kw-confirm-value">{result.accessKey}</div>
+              <div className="kw-confirm-warning">{result.accessKeyWarning}</div>
             </>
           )}
           {!result.accessKey && (
-            <div className="kw-helper">This report is saved under your account - find it any time in "My Reports".</div>
+            <div className="kw-helper" style={{ color: '#cbd5e1' }}>
+              You're signed in, so this report is already saved to your "My Reports" page - no access key needed.
+            </div>
           )}
         </div>
-        <button type="button" onClick={() => setResult(null)}>Submit Another Report</button>
+        <button type="button" className="kw-btn kw-btn-secondary" onClick={() => setResult(null)}>
+          Submit another report
+        </button>
       </div>
     );
   }
@@ -97,10 +115,8 @@ function SubmitReport() {
   return (
     <div>
       <h2>Submit a Corruption Report</h2>
-      <div className="kw-helper">
-        {user
-          ? `You're logged in as ${user.name} - this report will be saved to your account under "My Reports".`
-          : 'You are not logged in - this report is fully anonymous. You will get a Tracking Reference and a secret Access Key to check back later.'}
+      <div className="kw-helper" style={{ marginBottom: 14 }}>
+        {user ? `Reporting as ${user.name} - this will appear in your My Reports page.` : 'Reporting anonymously - no account needed. You will get a Tracking Reference and a secret Access Key at the end.'}
       </div>
       <form className="report-form kw-pro-form" onSubmit={handleSubmit}>
         <div className="kw-form-section">
@@ -110,19 +126,23 @@ function SubmitReport() {
 
         <div className="kw-form-section">
           <label htmlFor="reportedCategory">Category<span className="kw-required">*</span></label>
-          <select id="reportedCategory" name="reportedCategory" value={form.reportedCategory} onChange={handleCategoryChange} required>
-            <option value="">Select the closest match...</option>
-            {meta.categories.map((c) => <option key={c} value={c}>{c}</option>)}
+          <select id="reportedCategory" name="reportedCategory" value={form.reportedCategory} onChange={handleChange} required>
+            <option value="">Select a category...</option>
+            {categories.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
 
         {activeFields.length > 0 && (
           <div className="kw-category-fields">
-            <div className="kw-helper">Optional details for {form.reportedCategory} (fill in anything you know - none of this is required):</div>
+            <div className="kw-helper">Optional details, if known:</div>
             {activeFields.map((f) => (
               <div className="kw-form-section" key={f.name}>
                 <label htmlFor={f.name}>{f.label}</label>
-                <input id={f.name} value={categoryDetails[f.name] || ''} onChange={(e) => handleCategoryDetailChange(f.name, e.target.value)} />
+                <input
+                  id={f.name}
+                  value={categoryDetails[f.name] || ''}
+                  onChange={(e) => handleCategoryDetailChange(f.name, e.target.value)}
+                />
               </div>
             ))}
           </div>
@@ -131,7 +151,7 @@ function SubmitReport() {
         <div className="kw-form-section">
           <label htmlFor="description">Description<span className="kw-required">*</span></label>
           <textarea id="description" name="description" value={form.description} onChange={handleChange} placeholder="Describe the incident in detail..." required />
-          <div className="kw-helper">Please provide as much detail as possible (at least 20 characters).</div>
+          <div className="kw-helper">At least 20 characters. Please provide as much detail as possible.</div>
         </div>
 
         <div className="kw-demographic-row">
@@ -139,37 +159,39 @@ function SubmitReport() {
             <label htmlFor="county">County<span className="kw-required">*</span></label>
             <select id="county" name="county" value={form.county} onChange={handleChange} required>
               <option value="">Select county...</option>
-              {Object.keys(KENYA_COUNTIES).sort().map((c) => <option key={c} value={c}>{c}</option>)}
+              {Object.keys(KENYA_COUNTIES).map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
           <div className="kw-form-section">
             <label htmlFor="subCounty">Sub-county<span className="kw-required">*</span></label>
             <select id="subCounty" name="subCounty" value={form.subCounty} onChange={handleChange} required disabled={!form.county}>
               <option value="">Select sub-county...</option>
-              {subCounties.map((sc) => <option key={sc} value={sc}>{sc}</option>)}
+              {subCounties.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
         </div>
 
         <div className="kw-form-section">
-          <label htmlFor="incidentDateTime">When did it happen? (optional)</label>
+          <label htmlFor="incidentDateTime">When did this happen?</label>
           <input id="incidentDateTime" name="incidentDateTime" type="datetime-local" value={form.incidentDateTime} onChange={handleChange} />
         </div>
 
         <div className="kw-form-section">
           <label htmlFor="evidence">Evidence (optional)</label>
-          <input id="evidence" name="evidence" type="file" multiple accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime,audio/mpeg,audio/wav,audio/mp4,application/pdf,.docx"
-            onChange={(e) => setFiles(Array.from(e.target.files))} />
-          <div className="kw-helper">Images, video, audio or documents. Any identifying metadata (e.g. GPS location in photos) is automatically stripped before storage.</div>
+          <input
+            id="evidence"
+            type="file"
+            multiple
+            accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime,audio/mpeg,audio/wav,audio/mp4,application/pdf,.docx"
+            onChange={(e) => setFiles(Array.from(e.target.files))}
+          />
+          <div className="kw-helper">Images, video, audio or documents. Any embedded location/device metadata in photos is stripped automatically before storage.</div>
         </div>
 
         <div className="kw-form-section">
           <label>Demographic (optional)</label>
           <div className="kw-demographic-row">
-            <select name="ageGroup" value={form.ageGroup} onChange={handleChange}>
-              <option value="">Age group</option>
-              {AGE_GROUPS.map((a) => <option key={a} value={a}>{a}</option>)}
-            </select>
+            <input name="ageGroup" value={form.ageGroup} onChange={handleChange} placeholder="Age Group" />
             <input name="gender" value={form.gender} onChange={handleChange} placeholder="Gender" />
             <input name="occupation" value={form.occupation} onChange={handleChange} placeholder="Occupation" />
           </div>
