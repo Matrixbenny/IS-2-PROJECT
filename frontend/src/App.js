@@ -7,6 +7,9 @@ import About from './pages/About';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import TrackReport from './pages/TrackReport';
+import MyReports from './pages/MyReports';
+import ReviewerQueue from './pages/ReviewerQueue';
+import ManageUsers from './pages/ManageUsers';
 import { AuthProvider, useAuth } from './context/AuthContext';
 
 function HeaderUser() {
@@ -31,6 +34,7 @@ function HeaderUser() {
 }
 
 function AppShell() {
+  const { user } = useAuth();
   return (
     <Router>
       <div className="App">
@@ -48,12 +52,22 @@ function AppShell() {
           <NavLink to="/" end className="kw-nav-link">Home</NavLink>
           <NavLink to="/submit" className="kw-nav-link">Submit Report</NavLink>
           <NavLink to="/track" className="kw-nav-link">Track Report</NavLink>
+          {user && <NavLink to="/my-reports" className="kw-nav-link">My Reports</NavLink>}
+          {user && ['reviewer', 'admin'].includes(user.role) && (
+            <NavLink to="/reviewer-queue" className="kw-nav-link">Reviewer Queue</NavLink>
+          )}
+          {user && user.role === 'admin' && (
+            <NavLink to="/manage-users" className="kw-nav-link">Manage Users</NavLink>
+          )}
           <NavLink to="/about" className="kw-nav-link">About</NavLink>
         </nav>
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/submit" element={<SubmitReport />} />
           <Route path="/track" element={<TrackReport />} />
+          <Route path="/my-reports" element={<MyReports />} />
+          <Route path="/reviewer-queue" element={<ReviewerQueue />} />
+          <Route path="/manage-users" element={<ManageUsers />} />
           <Route path="/about" element={<About />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
