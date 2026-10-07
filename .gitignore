@@ -6,6 +6,7 @@
 !/Docs/my IS story.md
 !/backend/
 !/frontend/
+!/agency-portal/
 
 # ...except build artifacts, dependencies and secrets inside those app folders.
 node_modules/

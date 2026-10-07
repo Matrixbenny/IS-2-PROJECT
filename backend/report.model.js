@@ -64,7 +64,14 @@ const reportSchema = new mongoose.Schema({
   agencyReferral: {
     agency: { type: String, default: null },
     referenceNumber: { type: String, default: null },
-    notes: { type: String, default: null }
+    notes: { type: String, default: null },
+    // Updates entered via the demo Agency Partner Portal (concept prototype, not a live integration).
+    agencyUpdates: [
+      {
+        note: String,
+        createdAt: { type: Date, default: Date.now }
+      }
+    ]
   },
   relatedCaseLinks: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Report' }],
   claimedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },

@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Agency Partner Portal (Concept Demo)</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="demo-banner">
+    CONCEPT / DEMO PROTOTYPE - not a real government system. Simulates what an agency (e.g. DCI, EACC) might see
+    if Kenya Watch referred a case to them through a real-world liaison process.
+  </div>
+
+  <header class="ap-header">
+    <div class="ap-logo">🏛️</div>
+    <div>
+      <h1>Agency Partner Portal</h1>
+      <div class="ap-tagline">Referred corruption cases, for agency follow-up</div>
+    </div>
+  </header>
+
+  <main id="login-view" class="ap-card ap-narrow">
+    <h2>Partner Sign-In</h2>
+    <p class="ap-helper">Select your agency and enter the demo access code shared with your liaison.</p>
+    <form id="login-form">
+      <div class="ap-field">
+        <label for="agency-select">Agency</label>
+        <select id="agency-select" required></select>
+      </div>
+      <div class="ap-field">
+        <label for="access-code">Demo access code</label>
+        <input id="access-code" type="text" placeholder="e.g. EACC-DEMO-2026" required />
+      </div>
+      <button type="submit">Sign In</button>
+      <div id="login-error" class="ap-error" hidden></div>
+    </form>
+  </main>
+
+  <main id="cases-view" class="ap-card" hidden>
+    <div class="ap-cases-header">
+      <h2 id="agency-name-heading">Referred Cases</h2>
+      <button id="logout-btn" class="ap-btn-secondary">Sign out</button>
+    </div>
+    <div id="cases-list" class="ap-cases-list"></div>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
