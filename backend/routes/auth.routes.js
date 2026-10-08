@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const User = require('../user.model');
 const { signToken } = require('../utils/jwt');
 const { hashSecret, verifySecret } = require('../utils/tracking');
+const { sendMail } = require('../utils/mailer');
 const { attachUser, requireAuth } = require('../middleware/auth');
 
 const router = express.Router();
@@ -82,10 +83,14 @@ router.post('/forgot-password', async (req, res) => {
       user.resetPasswordExpiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
       await user.save();
 
-      // No real email service is configured for this project - the reset link is printed
-      // to the backend console so the flow can be demonstrated/tested end-to-end locally.
       const resetLink = `http://localhost:3000/reset-password?email=${encodeURIComponent(user.email)}&token=${token}`;
+      // Also logged to console as a reliable fallback in case the sandbox mail send is slow/unavailable.
       console.log(`[password reset] ${user.email} -> ${resetLink}`);
+      sendMail({
+        to: user.email,
+        subject: 'Reset your Kenya Watch password',
+        text: `We received a request to reset your password. This link expires in 1 hour: ${resetLink}`
+      }).catch((err) => console.error('[password reset] email send failed:', err.message));
     }
     return res.json(genericResponse);
   } catch (err) {
