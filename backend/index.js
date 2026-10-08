@@ -10,6 +10,7 @@ const reportRoutes = require('./routes/report.routes');
 const evidenceRoutes = require('./routes/evidence.routes');
 const userRoutes = require('./routes/users.routes');
 const agencyPortalRoutes = require('./routes/agencyPortal.routes');
+const statsRoutes = require('./routes/stats.routes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -28,6 +29,7 @@ app.use('/api/reports', reportRoutes);
 app.use('/api/evidence', evidenceRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/agency-portal', agencyPortalRoutes);
+app.use('/api/stats', statsRoutes);
 
 // Concept/demo-only static site simulating an agency partner view (decision #7 - no real integration exists).
 app.use('/agency-portal', express.static(path.join(__dirname, '..', 'agency-portal')));

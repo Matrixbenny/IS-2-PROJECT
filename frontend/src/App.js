@@ -10,6 +10,10 @@ import TrackReport from './pages/TrackReport';
 import MyReports from './pages/MyReports';
 import ReviewerQueue from './pages/ReviewerQueue';
 import ManageUsers from './pages/ManageUsers';
+import Stats from './pages/Stats';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
+import Escalations from './pages/Escalations';
 import { AuthProvider, useAuth } from './context/AuthContext';
 
 function HeaderUser() {
@@ -52,6 +56,7 @@ function AppShell() {
           <NavLink to="/" end className="kw-nav-link">Home</NavLink>
           <NavLink to="/submit" className="kw-nav-link">Submit Report</NavLink>
           <NavLink to="/track" className="kw-nav-link">Track Report</NavLink>
+          <NavLink to="/stats" className="kw-nav-link">Statistics</NavLink>
           {user && <NavLink to="/my-reports" className="kw-nav-link">My Reports</NavLink>}
           {user && ['reviewer', 'admin'].includes(user.role) && (
             <NavLink to="/reviewer-queue" className="kw-nav-link">Reviewer Queue</NavLink>
@@ -59,18 +64,25 @@ function AppShell() {
           {user && user.role === 'admin' && (
             <NavLink to="/manage-users" className="kw-nav-link">Manage Users</NavLink>
           )}
+          {user && user.role === 'admin' && (
+            <NavLink to="/escalations" className="kw-nav-link">Escalations</NavLink>
+          )}
           <NavLink to="/about" className="kw-nav-link">About</NavLink>
         </nav>
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/submit" element={<SubmitReport />} />
           <Route path="/track" element={<TrackReport />} />
+          <Route path="/stats" element={<Stats />} />
           <Route path="/my-reports" element={<MyReports />} />
           <Route path="/reviewer-queue" element={<ReviewerQueue />} />
           <Route path="/manage-users" element={<ManageUsers />} />
+          <Route path="/escalations" element={<Escalations />} />
           <Route path="/about" element={<About />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
         </Routes>
       </div>
     </Router>
