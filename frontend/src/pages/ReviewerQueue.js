@@ -20,6 +20,24 @@ function CaseDetail({ report, agencies, onChanged }) {
   const [notes, setNotes] = useState(report.agencyReferral?.notes || '');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [suggestions, setSuggestions] = useState([]);
+
+  useEffect(() => {
+    api.get(`/reports/${report._id}/related-suggestions`).then((res) => setSuggestions(res.data)).catch(() => {});
+  }, [report._id]);
+
+  const handleLink = async (relatedId) => {
+    setBusy(true);
+    setError('');
+    try {
+      const res = await api.post(`/reports/${report._id}/link`, { relatedId });
+      onChanged(res.data);
+      setSuggestions(suggestions.filter((s) => s.id !== relatedId));
+    } catch (err) {
+      setError(err.response?.data?.error || err.message);
+    }
+    setBusy(false);
+  };
 
   const handleClaim = async () => {
     setBusy(true);
@@ -120,6 +138,21 @@ function CaseDetail({ report, agencies, onChanged }) {
         </div>
         <button type="submit" className="kw-btn kw-btn-secondary" disabled={busy || !agency}>Save Referral</button>
       </form>
+
+      <div className="kw-case-form kw-pro-form">
+        <h4>Related Cases</h4>
+        <div className="kw-helper">Soft suggestions only - linking is additive and never merges or auto-links cases (decision #16).</div>
+        {report.relatedCaseLinks && report.relatedCaseLinks.length > 0 && (
+          <div className="kw-pro-meta"><b>Already linked:</b> {report.relatedCaseLinks.length} case(s)</div>
+        )}
+        {suggestions.length === 0 && <div className="kw-faded">No similar cases found (same category + county).</div>}
+        {suggestions.map((s) => (
+          <div className="kw-pro-meta" key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span><span className="kw-tracking-chip">{s.trackingReference}</span> {s.title} - {s.subCounty}</span>
+            <button type="button" className="kw-btn-secondary kw-btn" style={{ marginTop: 0, padding: '5px 12px', fontSize: '0.82rem' }} onClick={() => handleLink(s.id)} disabled={busy}>Link</button>
+          </div>
+        ))}
+      </div>
 
       {error && <div className="error">{error}</div>}
     </div>

@@ -27,7 +27,7 @@ function classifyInBackground(reportId, { title, description, evidenceCount }) {
     try {
       const result = classifyReportText({ title, description, evidenceCount });
       await Report.findByIdAndUpdate(reportId, {
-        classification: { category: result.category, urgency: result.urgency, confidence: result.confidence },
+        classification: { category: result.category, urgency: result.urgency, confidence: result.confidence, classifiedAt: new Date() },
         tags: result.tags
       });
     } catch (err) {
@@ -167,6 +167,30 @@ router.get('/queue', requireRole('reviewer', 'admin'), async (req, res) => {
   }
 });
 
+// GET /api/reports/escalations - Admin-only: High/Critical cases left unclaimed past the
+// threshold, timed from when classification completed, not from submission (decision #24).
+const ESCALATION_THRESHOLD_MINUTES = Number(process.env.ESCALATION_THRESHOLD_MINUTES) || 60;
+router.get('/escalations', requireRole('admin'), async (req, res) => {
+  try {
+    const cutoff = new Date(Date.now() - ESCALATION_THRESHOLD_MINUTES * 60 * 1000);
+    const reports = await Report.find({
+      claimedBy: null,
+      status: { $in: ['Received', 'In Review'] },
+      'classification.urgency': { $in: ['High', 'Critical'] },
+      'classification.classifiedAt': { $lte: cutoff }
+    }).sort({ 'classification.classifiedAt': 1 });
+    return res.json({
+      thresholdMinutes: ESCALATION_THRESHOLD_MINUTES,
+      cases: reports.map((r) => ({
+        ...withSuggestedAgency(r),
+        minutesSinceClassified: Math.round((Date.now() - r.classification.classifiedAt.getTime()) / 60000)
+      }))
+    });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/reports/track - anonymous deep-tier lookup via Tracking Reference + Access Key (decision #21).
 router.get('/track', async (req, res) => {
   try {
@@ -254,6 +278,59 @@ router.patch('/:id/status', requireRole('reviewer', 'admin'), async (req, res) =
     }
     report.statusHistory.push({ status, changedAt: new Date(), changedBy: req.user._id });
     await report.save();
+    return res.json(withSuggestedAgency(report));
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
+  }
+});
+
+// GET /api/reports/:id/related-suggestions - soft suggestions only, never auto-merged (decision #16).
+router.get('/:id/related-suggestions', requireRole('reviewer', 'admin'), async (req, res) => {
+  try {
+    const report = await Report.findById(req.params.id);
+    if (!report) return res.status(404).json({ error: 'Report not found' });
+
+    const alreadyLinked = report.relatedCaseLinks.map((id) => id.toString());
+    const candidates = await Report.find({
+      _id: { $ne: report._id, $nin: alreadyLinked },
+      reportedCategory: report.reportedCategory,
+      county: report.county
+    }).sort({ createdAt: -1 }).limit(10);
+
+    return res.json(candidates.map((c) => ({
+      id: c._id,
+      trackingReference: c.trackingReference,
+      title: c.title,
+      reportedCategory: c.reportedCategory,
+      subCounty: c.subCounty,
+      createdAt: c.createdAt
+    })));
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/reports/:id/link - Reviewer/Admin manually links two cases; always additive, never destructive.
+router.post('/:id/link', requireRole('reviewer', 'admin'), async (req, res) => {
+  try {
+    const { relatedId } = req.body;
+    if (!relatedId) return res.status(400).json({ error: 'relatedId is required' });
+    if (relatedId === req.params.id) return res.status(400).json({ error: 'A case cannot be linked to itself' });
+
+    const [report, related] = await Promise.all([
+      Report.findById(req.params.id),
+      Report.findById(relatedId)
+    ]);
+    if (!report || !related) return res.status(404).json({ error: 'Report not found' });
+
+    if (!report.relatedCaseLinks.some((id) => id.toString() === relatedId)) {
+      report.relatedCaseLinks.push(related._id);
+      await report.save();
+    }
+    if (!related.relatedCaseLinks.some((id) => id.toString() === req.params.id)) {
+      related.relatedCaseLinks.push(report._id);
+      await related.save();
+    }
     return res.json(withSuggestedAgency(report));
   } catch (err) {
     return res.status(400).json({ error: err.message });
