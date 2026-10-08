@@ -57,7 +57,9 @@ const reportSchema = new mongoose.Schema({
   classification: {
     category: { type: String, default: null },
     urgency: { type: String, enum: ['Low', 'Medium', 'High', 'Critical', null], default: null },
-    confidence: { type: Number, default: null }
+    confidence: { type: Number, default: null },
+    // When classification completed - the escalation clock (decision #24) starts here, not at submission.
+    classifiedAt: { type: Date, default: null }
   },
   tags: [String],
 
