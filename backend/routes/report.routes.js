@@ -1,5 +1,6 @@
 const express = require('express');
 const Report = require('../report.model');
+const User = require('../user.model');
 const { CATEGORIES, CATEGORY_FIELDS } = require('../utils/categories');
 const { generateTrackingReference, generateAccessKey, hashSecret, verifySecret } = require('../utils/tracking');
 const { classifyReportText } = require('../utils/classifier');
@@ -8,6 +9,7 @@ const { storeEvidenceFile } = require('../utils/evidence');
 const { getBucket } = require('../utils/gridfs');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { AGENCIES, suggestAgencyForCategory } = require('../utils/agencies');
+const { sendMail } = require('../utils/mailer');
 
 const router = express.Router();
 
@@ -277,6 +279,36 @@ router.patch('/:id/status', requireRole('reviewer', 'admin'), async (req, res) =
       report.resolutionReference = resolutionReference;
     }
     report.statusHistory.push({ status, changedAt: new Date(), changedBy: req.user._id });
+    await report.save();
+
+    // Path B opted-in notification (decision #23) - Path A never gets proactive contact, by design.
+    if (report.user) {
+      User.findById(report.user).then((owner) => {
+        if (owner && owner.emailNotificationsOptIn) {
+          sendMail({
+            to: owner.email,
+            subject: `Your Kenya Watch report ${report.trackingReference} is now "${status}"`,
+            text: `Your report "${report.title}" (${report.trackingReference}) status changed to: ${status}.` +
+              (status === 'Resolved' ? ` Resolution: ${resolutionNote}` : '')
+          }).catch((err) => console.error('[status email] send failed:', err.message));
+        }
+      }).catch(() => {});
+    }
+
+    return res.json(withSuggestedAgency(report));
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
+  }
+});
+
+// PATCH /api/reports/:id/legal-hold - Admin-only: exempts a case from automatic
+// identity anonymization while it's under active legal proceedings (decision #11).
+router.patch('/:id/legal-hold', requireRole('admin'), async (req, res) => {
+  try {
+    const { legalHold } = req.body;
+    const report = await Report.findById(req.params.id);
+    if (!report) return res.status(404).json({ error: 'Report not found' });
+    report.legalHold = !!legalHold;
     await report.save();
     return res.json(withSuggestedAgency(report));
   } catch (err) {

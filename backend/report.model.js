@@ -77,6 +77,9 @@ const reportSchema = new mongoose.Schema({
   },
   relatedCaseLinks: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Report' }],
   claimedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+  // Set by an Admin when a case is under active legal proceedings - exempts it from
+  // the automatic identity-anonymization retention window (decision #11).
+  legalHold: { type: Boolean, default: false },
 
   createdAt: { type: Date, default: Date.now }
 });
@@ -122,6 +125,7 @@ reportSchema.methods.toReviewerTier = function toReviewerTier() {
     agencyReferral: this.agencyReferral,
     relatedCaseLinks: this.relatedCaseLinks,
     claimedBy: this.claimedBy,
+    legalHold: this.legalHold,
     hasAccount: !!this.user
   };
 };

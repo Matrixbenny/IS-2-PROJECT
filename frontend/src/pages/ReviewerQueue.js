@@ -11,7 +11,7 @@ function urgencyClass(urgency) {
 
 const STATUSES = ['Received', 'In Review', 'Resolved', 'Rejected'];
 
-function CaseDetail({ report, agencies, onChanged }) {
+function CaseDetail({ report, agencies, onChanged, isAdmin }) {
   const [status, setStatus] = useState(report.status);
   const [resolutionNote, setResolutionNote] = useState(report.resolutionNote || '');
   const [resolutionReference, setResolutionReference] = useState(report.resolutionReference || '');
@@ -33,6 +33,18 @@ function CaseDetail({ report, agencies, onChanged }) {
       const res = await api.post(`/reports/${report._id}/link`, { relatedId });
       onChanged(res.data);
       setSuggestions(suggestions.filter((s) => s.id !== relatedId));
+    } catch (err) {
+      setError(err.response?.data?.error || err.message);
+    }
+    setBusy(false);
+  };
+
+  const handleLegalHoldToggle = async (e) => {
+    setBusy(true);
+    setError('');
+    try {
+      const res = await api.patch(`/reports/${report._id}/legal-hold`, { legalHold: e.target.checked });
+      onChanged(res.data);
     } catch (err) {
       setError(err.response?.data?.error || err.message);
     }
@@ -90,6 +102,14 @@ function CaseDetail({ report, agencies, onChanged }) {
       <div className="kw-pro-meta"><b>Reporter:</b> {report.hasAccount ? 'Registered reporter' : 'Anonymous'}</div>
       <div className="kw-pro-meta"><b>Claimed by:</b> {report.claimedBy ? 'Claimed' : <span className="kw-faded">Unclaimed</span>}</div>
       <div className="kw-pro-meta"><b>Evidence:</b> {report.evidence.length > 0 ? `${report.evidence.length} file(s)` : 'None'}</div>
+      {isAdmin && (
+        <div className="kw-pro-meta">
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
+            <input type="checkbox" style={{ width: 'auto' }} checked={!!report.legalHold} onChange={handleLegalHoldToggle} disabled={busy} />
+            Under active legal hold (exempt from identity anonymization)
+          </label>
+        </div>
+      )}
 
       {!report.claimedBy && (
         <button type="button" className="kw-btn" onClick={handleClaim} disabled={busy}>Claim This Case</button>
@@ -203,7 +223,7 @@ function ReviewerQueue() {
             <button type="button" className="kw-btn kw-btn-secondary" onClick={() => setSelectedId(selectedId === r._id ? null : r._id)}>
               {selectedId === r._id ? 'Close' : 'Open Case'}
             </button>
-            {selectedId === r._id && <CaseDetail report={r} agencies={agencies} onChanged={handleChanged} />}
+            {selectedId === r._id && <CaseDetail report={r} agencies={agencies} onChanged={handleChanged} isAdmin={user.role === 'admin'} />}
           </div>
         ))}
       </div>
