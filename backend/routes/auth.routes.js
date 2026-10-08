@@ -1,6 +1,8 @@
 const express = require('express');
+const crypto = require('crypto');
 const User = require('../user.model');
 const { signToken } = require('../utils/jwt');
+const { hashSecret, verifySecret } = require('../utils/tracking');
 const { attachUser, requireAuth } = require('../middleware/auth');
 
 const router = express.Router();
@@ -62,6 +64,60 @@ router.post('/logout', (req, res) => {
 router.get('/me', attachUser, requireAuth, (req, res) => {
   const { _id, name, email, role, emailNotificationsOptIn } = req.user;
   return res.json({ user: { id: _id, name, email, role, emailNotificationsOptIn } });
+});
+
+// POST /api/auth/forgot-password - decision #22: single-use, time-limited reset link.
+// Always responds the same way regardless of whether the email exists, so this endpoint
+// can never be used to check who has an account.
+router.post('/forgot-password', async (req, res) => {
+  const genericResponse = { message: 'If this email is registered, a reset link has been sent.' };
+  try {
+    const { email } = req.body;
+    if (!email) return res.json(genericResponse);
+
+    const user = await User.findOne({ email: email.toLowerCase() });
+    if (user) {
+      const token = crypto.randomBytes(32).toString('hex');
+      user.resetPasswordTokenHash = await hashSecret(token);
+      user.resetPasswordExpiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+      await user.save();
+
+      // No real email service is configured for this project - the reset link is printed
+      // to the backend console so the flow can be demonstrated/tested end-to-end locally.
+      const resetLink = `http://localhost:3000/reset-password?email=${encodeURIComponent(user.email)}&token=${token}`;
+      console.log(`[password reset] ${user.email} -> ${resetLink}`);
+    }
+    return res.json(genericResponse);
+  } catch (err) {
+    return res.json(genericResponse);
+  }
+});
+
+// POST /api/auth/reset-password - consumes the single-use token, then invalidates it.
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { email, token, newPassword } = req.body;
+    if (!email || !token || !newPassword) {
+      return res.status(400).json({ error: 'Email, token and new password are required' });
+    }
+    if (newPassword.length < 8) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters' });
+    }
+
+    const user = await User.findOne({ email: email.toLowerCase() });
+    const tokenValid = user && user.resetPasswordExpiry && user.resetPasswordExpiry > new Date()
+      ? await verifySecret(token, user.resetPasswordTokenHash)
+      : false;
+    if (!tokenValid) return res.status(400).json({ error: 'This reset link is invalid or has expired' });
+
+    user.password = newPassword;
+    user.resetPasswordTokenHash = null;
+    user.resetPasswordExpiry = null;
+    await user.save();
+    return res.json({ message: 'Password updated. You can now sign in with your new password.' });
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
+  }
 });
 
 module.exports = router;

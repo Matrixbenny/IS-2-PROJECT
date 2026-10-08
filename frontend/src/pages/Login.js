@@ -42,6 +42,9 @@ function Login() {
       <div className="kw-auth-switch">
         Don't have an account? <Link to="/register">Register</Link>
       </div>
+      <div className="kw-auth-switch">
+        <Link to="/forgot-password">Forgot password?</Link>
+      </div>
     </div>
   );
 }
