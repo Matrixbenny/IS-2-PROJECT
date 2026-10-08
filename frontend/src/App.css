@@ -255,6 +255,28 @@
 }
 .kw-header-user strong { color: #fff; }
 
+.kw-lang-toggle {
+  display: flex;
+  gap: 4px;
+  z-index: 1;
+  margin-left: auto;
+}
+.kw-lang-toggle button {
+  background: rgba(255,255,255,0.12);
+  color: #e2e8f0;
+  border: 1px solid rgba(255,255,255,0.25);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.kw-lang-toggle button.active {
+  background: var(--kw-teal);
+  color: #fff;
+  border-color: var(--kw-teal);
+}
+
 body {
   background: var(--kw-bg);
   font-family: 'Inter', 'Segoe UI', 'Roboto', 'Arial', sans-serif;

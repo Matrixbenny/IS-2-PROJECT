@@ -15,22 +15,34 @@ import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import Escalations from './pages/Escalations';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { LanguageProvider, useLanguage } from './context/LanguageContext';
+
+function LanguageToggle() {
+  const { language, changeLanguage } = useLanguage();
+  return (
+    <div className="kw-lang-toggle">
+      <button type="button" className={language === 'en' ? 'active' : ''} onClick={() => changeLanguage('en')}>EN</button>
+      <button type="button" className={language === 'sw' ? 'active' : ''} onClick={() => changeLanguage('sw')}>SW</button>
+    </div>
+  );
+}
 
 function HeaderUser() {
   const { user, logout } = useAuth();
+  const { t } = useLanguage();
   if (!user) {
     return (
       <div className="kw-header-user">
-        <NavLink to="/login" className="kw-nav-link kw-nav-cta">Sign In</NavLink>
+        <NavLink to="/login" className="kw-nav-link kw-nav-cta">{t('signIn')}</NavLink>
       </div>
     );
   }
   return (
     <div className="kw-header-user">
-      Signed in as <strong>{user.name}</strong> ({user.role})
+      {t('signedInAs')} <strong>{user.name}</strong> ({user.role})
       <div>
         <button type="button" className="kw-btn kw-btn-secondary" style={{ marginTop: 6, padding: '6px 14px', fontSize: '0.85rem' }} onClick={logout}>
-          Sign out
+          {t('signOut')}
         </button>
       </div>
     </div>
@@ -39,6 +51,7 @@ function HeaderUser() {
 
 function AppShell() {
   const { user } = useAuth();
+  const { t } = useLanguage();
   return (
     <Router>
       <div className="App">
@@ -48,26 +61,27 @@ function AppShell() {
           </div>
           <div className="kw-branding">
             <h1>Kenya Watch</h1>
-            <div className="kw-tagline">A Trusted Platform to Report and Track Corruption</div>
+            <div className="kw-tagline">{t('tagline')}</div>
           </div>
+          <LanguageToggle />
           <HeaderUser />
         </header>
         <nav className="kw-nav">
-          <NavLink to="/" end className="kw-nav-link">Home</NavLink>
-          <NavLink to="/submit" className="kw-nav-link">Submit Report</NavLink>
-          <NavLink to="/track" className="kw-nav-link">Track Report</NavLink>
-          <NavLink to="/stats" className="kw-nav-link">Statistics</NavLink>
-          {user && <NavLink to="/my-reports" className="kw-nav-link">My Reports</NavLink>}
+          <NavLink to="/" end className="kw-nav-link">{t('nav_home')}</NavLink>
+          <NavLink to="/submit" className="kw-nav-link">{t('nav_submit')}</NavLink>
+          <NavLink to="/track" className="kw-nav-link">{t('nav_track')}</NavLink>
+          <NavLink to="/stats" className="kw-nav-link">{t('nav_stats')}</NavLink>
+          {user && <NavLink to="/my-reports" className="kw-nav-link">{t('nav_myReports')}</NavLink>}
           {user && ['reviewer', 'admin'].includes(user.role) && (
-            <NavLink to="/reviewer-queue" className="kw-nav-link">Reviewer Queue</NavLink>
+            <NavLink to="/reviewer-queue" className="kw-nav-link">{t('nav_reviewerQueue')}</NavLink>
           )}
           {user && user.role === 'admin' && (
-            <NavLink to="/manage-users" className="kw-nav-link">Manage Users</NavLink>
+            <NavLink to="/manage-users" className="kw-nav-link">{t('nav_manageUsers')}</NavLink>
           )}
           {user && user.role === 'admin' && (
-            <NavLink to="/escalations" className="kw-nav-link">Escalations</NavLink>
+            <NavLink to="/escalations" className="kw-nav-link">{t('nav_escalations')}</NavLink>
           )}
-          <NavLink to="/about" className="kw-nav-link">About</NavLink>
+          <NavLink to="/about" className="kw-nav-link">{t('nav_about')}</NavLink>
         </nav>
         <Routes>
           <Route path="/" element={<Home />} />
@@ -91,9 +105,11 @@ function AppShell() {
 
 function App() {
   return (
-    <AuthProvider>
-      <AppShell />
-    </AuthProvider>
+    <LanguageProvider>
+      <AuthProvider>
+        <AppShell />
+      </AuthProvider>
+    </LanguageProvider>
   );
 }
 

@@ -1,0 +1,95 @@
+// Lightweight i18n: English + Kiswahili (decision #12 - Kenya's two official languages).
+// Deliberately NOT using a full i18n library - a plain dictionary + context keeps this
+// scoped and auditable, covering the main citizen-facing screens rather than every string.
+const translations = {
+  en: {
+    tagline: 'A Trusted Platform to Report and Track Corruption',
+    nav_home: 'Home',
+    nav_submit: 'Submit Report',
+    nav_track: 'Track Report',
+    nav_stats: 'Statistics',
+    nav_myReports: 'My Reports',
+    nav_reviewerQueue: 'Reviewer Queue',
+    nav_manageUsers: 'Manage Users',
+    nav_escalations: 'Escalations',
+    nav_about: 'About',
+    signIn: 'Sign In',
+    signOut: 'Sign out',
+    signedInAs: 'Signed in as',
+
+    home_title: 'Public Case List',
+    home_helper: "General details only - this list never reveals who filed a report, even for registered reporters.",
+    home_haveRef: 'Have a Tracking Reference?',
+    home_lookup: 'Look up your case',
+    home_loading: 'Loading reports...',
+    home_empty: 'No reports found. Be the first to submit a report!',
+
+    submit_title: 'Submit a Corruption Report',
+    submit_anon: 'Reporting anonymously - no account needed. You will get a Tracking Reference and a secret Access Key at the end.',
+    submit_loggedIn: 'this will appear in your My Reports page.',
+    label_title: 'Title',
+    label_category: 'Category',
+    label_description: 'Description',
+    label_county: 'County',
+    label_subCounty: 'Sub-county',
+    label_incidentDate: 'When did this happen?',
+    label_evidence: 'Evidence (optional)',
+    label_demographic: 'Demographic (optional)',
+    btn_submitReport: 'Submit Report',
+    btn_submitting: 'Submitting...',
+
+    login_title: 'Welcome back',
+    label_email: 'Email',
+    label_password: 'Password',
+    btn_signingIn: 'Signing in...',
+    noAccount: "Don't have an account?",
+    register: 'Register',
+    forgotPassword: 'Forgot password?'
+  },
+  sw: {
+    tagline: 'Jukwaa Linaloaminika la Kuripoti na Kufuatilia Ufisadi',
+    nav_home: 'Nyumbani',
+    nav_submit: 'Wasilisha Ripoti',
+    nav_track: 'Fuatilia Ripoti',
+    nav_stats: 'Takwimu',
+    nav_myReports: 'Ripoti Zangu',
+    nav_reviewerQueue: 'Foleni ya Wakaguzi',
+    nav_manageUsers: 'Dhibiti Watumiaji',
+    nav_escalations: 'Masuala ya Dharura',
+    nav_about: 'Kuhusu',
+    signIn: 'Ingia',
+    signOut: 'Toka',
+    signedInAs: 'Umeingia kama',
+
+    home_title: 'Orodha ya Kesi za Umma',
+    home_helper: 'Maelezo ya jumla tu - orodha hii haiwahi kufichua aliyewasilisha ripoti, hata kwa waripoti waliosajiliwa.',
+    home_haveRef: 'Una Nambari ya Kufuatilia?',
+    home_lookup: 'Tafuta kesi yako',
+    home_loading: 'Inapakia ripoti...',
+    home_empty: 'Hakuna ripoti zilizopatikana. Kuwa wa kwanza kuwasilisha ripoti!',
+
+    submit_title: 'Wasilisha Ripoti ya Ufisadi',
+    submit_anon: 'Unaripoti bila kujitambulisha - hauhitaji akaunti. Utapewa Nambari ya Kufuatilia na Nenosiri la Siri mwishoni.',
+    submit_loggedIn: 'hii itaonekana kwenye ukurasa wako wa Ripoti Zangu.',
+    label_title: 'Kichwa',
+    label_category: 'Aina',
+    label_description: 'Maelezo',
+    label_county: 'Kaunti',
+    label_subCounty: 'Kaunti Ndogo',
+    label_incidentDate: 'Tukio hili lilitokea lini?',
+    label_evidence: 'Ushahidi (si lazima)',
+    label_demographic: 'Takwimu Binafsi (si lazima)',
+    btn_submitReport: 'Wasilisha Ripoti',
+    btn_submitting: 'Inawasilisha...',
+
+    login_title: 'Karibu tena',
+    label_email: 'Barua pepe',
+    label_password: 'Nenosiri',
+    btn_signingIn: 'Inaingia...',
+    noAccount: 'Huna akaunti?',
+    register: 'Jisajili',
+    forgotPassword: 'Umesahau nenosiri?'
+  }
+};
+
+export default translations;

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import api from '../api';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 import KENYA_COUNTIES from '../data/kenyaCounties';
 
 const emptyForm = {
@@ -17,6 +18,7 @@ const emptyForm = {
 
 function SubmitReport() {
   const { user } = useAuth();
+  const { t } = useLanguage();
   const [categories, setCategories] = useState([]);
   const [fieldsByCategory, setFieldsByCategory] = useState({});
   const [form, setForm] = useState(emptyForm);
@@ -114,18 +116,18 @@ function SubmitReport() {
 
   return (
     <div>
-      <h2>Submit a Corruption Report</h2>
+      <h2>{t('submit_title')}</h2>
       <div className="kw-helper" style={{ marginBottom: 14 }}>
-        {user ? `Reporting as ${user.name} - this will appear in your My Reports page.` : 'Reporting anonymously - no account needed. You will get a Tracking Reference and a secret Access Key at the end.'}
+        {user ? `Reporting as ${user.name} - ${t('submit_loggedIn')}` : t('submit_anon')}
       </div>
       <form className="report-form kw-pro-form" onSubmit={handleSubmit}>
         <div className="kw-form-section">
-          <label htmlFor="title">Title<span className="kw-required">*</span></label>
+          <label htmlFor="title">{t('label_title')}<span className="kw-required">*</span></label>
           <input id="title" name="title" value={form.title} onChange={handleChange} placeholder="e.g. Bribery at City Hall" required />
         </div>
 
         <div className="kw-form-section">
-          <label htmlFor="reportedCategory">Category<span className="kw-required">*</span></label>
+          <label htmlFor="reportedCategory">{t('label_category')}<span className="kw-required">*</span></label>
           <select id="reportedCategory" name="reportedCategory" value={form.reportedCategory} onChange={handleChange} required>
             <option value="">Select a category...</option>
             {categories.map((c) => <option key={c} value={c}>{c}</option>)}
@@ -149,21 +151,21 @@ function SubmitReport() {
         )}
 
         <div className="kw-form-section">
-          <label htmlFor="description">Description<span className="kw-required">*</span></label>
+          <label htmlFor="description">{t('label_description')}<span className="kw-required">*</span></label>
           <textarea id="description" name="description" value={form.description} onChange={handleChange} placeholder="Describe the incident in detail..." required />
           <div className="kw-helper">At least 20 characters. Please provide as much detail as possible.</div>
         </div>
 
         <div className="kw-demographic-row">
           <div className="kw-form-section">
-            <label htmlFor="county">County<span className="kw-required">*</span></label>
+            <label htmlFor="county">{t('label_county')}<span className="kw-required">*</span></label>
             <select id="county" name="county" value={form.county} onChange={handleChange} required>
               <option value="">Select county...</option>
               {Object.keys(KENYA_COUNTIES).map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
           <div className="kw-form-section">
-            <label htmlFor="subCounty">Sub-county<span className="kw-required">*</span></label>
+            <label htmlFor="subCounty">{t('label_subCounty')}<span className="kw-required">*</span></label>
             <select id="subCounty" name="subCounty" value={form.subCounty} onChange={handleChange} required disabled={!form.county}>
               <option value="">Select sub-county...</option>
               {subCounties.map((s) => <option key={s} value={s}>{s}</option>)}
@@ -172,12 +174,12 @@ function SubmitReport() {
         </div>
 
         <div className="kw-form-section">
-          <label htmlFor="incidentDateTime">When did this happen?</label>
+          <label htmlFor="incidentDateTime">{t('label_incidentDate')}</label>
           <input id="incidentDateTime" name="incidentDateTime" type="datetime-local" value={form.incidentDateTime} onChange={handleChange} />
         </div>
 
         <div className="kw-form-section">
-          <label htmlFor="evidence">Evidence (optional)</label>
+          <label htmlFor="evidence">{t('label_evidence')}</label>
           <input
             id="evidence"
             type="file"
@@ -189,7 +191,7 @@ function SubmitReport() {
         </div>
 
         <div className="kw-form-section">
-          <label>Demographic (optional)</label>
+          <label>{t('label_demographic')}</label>
           <div className="kw-demographic-row">
             <input name="ageGroup" value={form.ageGroup} onChange={handleChange} placeholder="Age Group" />
             <input name="gender" value={form.gender} onChange={handleChange} placeholder="Gender" />
@@ -197,7 +199,7 @@ function SubmitReport() {
           </div>
         </div>
 
-        <button type="submit" disabled={loading}>{loading ? 'Submitting...' : 'Submit Report'}</button>
+        <button type="submit" disabled={loading}>{loading ? t('btn_submitting') : t('btn_submitReport')}</button>
         {error && <div className="error">{error}</div>}
       </form>
     </div>
