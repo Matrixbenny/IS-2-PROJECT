@@ -7,6 +7,7 @@
 !/backend/
 !/frontend/
 !/agency-portal/
+!/README.md
 
 # ...except build artifacts, dependencies and secrets inside those app folders.
 node_modules/
