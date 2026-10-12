@@ -10,6 +10,7 @@ const { getBucket } = require('../utils/gridfs');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { AGENCIES, suggestAgencyForCategory } = require('../utils/agencies');
 const { sendMail } = require('../utils/mailer');
+const { generateChallenge, verifyChallenge } = require('../utils/captcha');
 
 const router = express.Router();
 
@@ -48,10 +49,18 @@ router.get('/agencies', requireRole('reviewer', 'admin'), (req, res) => {
   res.json({ agencies: AGENCIES });
 });
 
+// GET /api/reports/captcha-challenge - self-hosted human-verification challenge (decision #9).
+router.get('/captcha-challenge', (req, res) => {
+  res.json(generateChallenge());
+});
+
 // POST /api/reports - submit a new report, Path A (anonymous) or Path B (logged in) side by side (decision #3).
 router.post('/', upload.array('evidence', 10), async (req, res) => {
   try {
-    const { title, reportedCategory, description, county, subCounty, incidentDateTime } = req.body;
+    const { title, reportedCategory, description, county, subCounty, incidentDateTime, captchaToken, captchaAnswer } = req.body;
+    if (!captchaToken || !verifyChallenge(captchaToken, captchaAnswer)) {
+      return res.status(400).json({ error: 'Incorrect or expired verification answer - please try the challenge again' });
+    }
     if (!title || !reportedCategory || !description || !county || !subCounty) {
       return res.status(400).json({ error: 'Title, category, description, county and sub-county are required' });
     }

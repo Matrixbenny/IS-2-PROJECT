@@ -27,6 +27,16 @@ function SubmitReport() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState(null);
+  const [captcha, setCaptcha] = useState(null);
+  const [captchaAnswer, setCaptchaAnswer] = useState('');
+
+  const loadCaptcha = () => {
+    api.get('/reports/captcha-challenge').then((res) => setCaptcha(res.data)).catch(() => {});
+  };
+
+  useEffect(() => {
+    loadCaptcha();
+  }, []);
 
   useEffect(() => {
     api.get('/reports/categories')
@@ -67,6 +77,8 @@ function SubmitReport() {
       if (form.gender) payload.append('gender', form.gender);
       if (form.occupation) payload.append('occupation', form.occupation);
       payload.append('categorySpecificDetails', JSON.stringify(categoryDetails));
+      payload.append('captchaToken', captcha?.token || '');
+      payload.append('captchaAnswer', captchaAnswer);
       files.forEach((f) => payload.append('evidence', f));
 
       const res = await api.post('/reports', payload, {
@@ -76,8 +88,11 @@ function SubmitReport() {
       setForm(emptyForm);
       setCategoryDetails({});
       setFiles([]);
+      setCaptchaAnswer('');
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to submit report');
+      loadCaptcha();
+      setCaptchaAnswer('');
     }
     setLoading(false);
   };
@@ -197,6 +212,11 @@ function SubmitReport() {
             <input name="gender" value={form.gender} onChange={handleChange} placeholder="Gender" />
             <input name="occupation" value={form.occupation} onChange={handleChange} placeholder="Occupation" />
           </div>
+        </div>
+
+        <div className="kw-form-section">
+          <label htmlFor="captchaAnswer">Quick human check{captcha ? `: ${captcha.question}` : '...'}<span className="kw-required">*</span></label>
+          <input id="captchaAnswer" value={captchaAnswer} onChange={(e) => setCaptchaAnswer(e.target.value)} required />
         </div>
 
         <button type="submit" disabled={loading}>{loading ? t('btn_submitting') : t('btn_submitReport')}</button>
