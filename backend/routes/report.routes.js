@@ -361,7 +361,7 @@ router.get('/admin-overview', requireRole('admin'), async (req, res) => {
       'classification.urgency': { $in: ['High', 'Critical'] },
       'classification.classifiedAt': { $lte: cutoff }
     };
-    const [activeReports, archivedReports, statuses, roles, escalations] = await Promise.all([
+    const [activeReports, archivedReports, statuses, roles, escalations, attention] = await Promise.all([
       Report.countDocuments({ archivedAt: null }),
       Report.countDocuments({ archivedAt: { $ne: null } }),
       Report.aggregate([
@@ -371,7 +371,44 @@ router.get('/admin-overview', requireRole('admin'), async (req, res) => {
       User.aggregate([
         { $group: { _id: '$role', count: { $sum: 1 } } }
       ]),
-      Report.countDocuments(escalationFilter)
+      Report.countDocuments(escalationFilter),
+      Report.aggregate([
+        {
+          $match: {
+            archivedAt: null,
+            claimedBy: null,
+            status: { $in: ['Received', 'In Review'] }
+          }
+        },
+        {
+          $addFields: {
+            urgencyRank: {
+              $switch: {
+                branches: [
+                  { case: { $eq: ['$classification.urgency', 'Critical'] }, then: 3 },
+                  { case: { $eq: ['$classification.urgency', 'High'] }, then: 2 },
+                  { case: { $eq: ['$classification.urgency', 'Medium'] }, then: 1 }
+                ],
+                default: 0
+              }
+            }
+          }
+        },
+        { $sort: { urgencyRank: -1, 'classification.classifiedAt': 1, createdAt: 1 } },
+        { $limit: 5 },
+        {
+          $project: {
+            _id: 1,
+            trackingReference: 1,
+            title: 1,
+            status: 1,
+            county: 1,
+            subCounty: 1,
+            createdAt: 1,
+            'classification.urgency': 1
+          }
+        }
+      ])
     ]);
 
     const statusCounts = Object.fromEntries(statuses.map(({ _id, count }) => [_id, count]));
@@ -397,7 +434,8 @@ router.get('/admin-overview', requireRole('admin'), async (req, res) => {
       escalations: {
         count: escalations,
         thresholdMinutes: ESCALATION_THRESHOLD_MINUTES
-      }
+      },
+      attention
     });
   } catch (err) {
     return res.status(500).json({ error: err.message });

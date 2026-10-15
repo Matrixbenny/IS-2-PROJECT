@@ -67,6 +67,58 @@ test('GET /api/reports/admin-overview returns exact database counts and is Admin
     .set('Cookie', userCookie);
   assert.strictEqual(forbidden.status, 403);
 
+  const attentionCases = await Report.create([
+    {
+      trackingReference: 'KW-OVRCR1',
+      title: 'Critical unclaimed case',
+      reportedCategory: 'Bribery',
+      description: 'Critical unclaimed report for admin overview.',
+      county: 'Nairobi',
+      subCounty: 'Westlands',
+      status: 'In Review',
+      classification: { urgency: 'Critical', classifiedAt: new Date(Date.now() - 60 * 60 * 1000) }
+    },
+    {
+      trackingReference: 'KW-OVRHI1',
+      title: 'High unclaimed case',
+      reportedCategory: 'Bribery',
+      description: 'High priority unclaimed report for admin overview.',
+      county: 'Nairobi',
+      subCounty: 'Kibra',
+      classification: { urgency: 'High', classifiedAt: new Date(Date.now() - 2 * 60 * 60 * 1000) }
+    },
+    {
+      trackingReference: 'KW-OVRCL1',
+      title: 'Claimed critical case',
+      reportedCategory: 'Bribery',
+      description: 'Claimed cases should not appear in admin attention list.',
+      county: 'Nairobi',
+      subCounty: 'Kibra',
+      claimedBy: user._id,
+      classification: { urgency: 'Critical', classifiedAt: new Date(Date.now() - 3 * 60 * 60 * 1000) }
+    },
+    {
+      trackingReference: 'KW-OVRRE1',
+      title: 'Resolved critical case',
+      reportedCategory: 'Bribery',
+      description: 'Resolved cases should not appear in admin attention list.',
+      county: 'Nairobi',
+      subCounty: 'Kibra',
+      status: 'Resolved',
+      classification: { urgency: 'Critical', classifiedAt: new Date(Date.now() - 4 * 60 * 60 * 1000) }
+    },
+    {
+      trackingReference: 'KW-OVRAR1',
+      title: 'Archived critical case',
+      reportedCategory: 'Bribery',
+      description: 'Archived cases should not appear in admin attention list.',
+      county: 'Nairobi',
+      subCounty: 'Kibra',
+      archivedAt: new Date(),
+      classification: { urgency: 'Critical', classifiedAt: new Date(Date.now() - 5 * 60 * 60 * 1000) }
+    }
+  ]);
+
   const admin = await User.create({
     name: 'Overview Admin',
     email: 'overview-admin@example.com',
@@ -108,6 +160,16 @@ test('GET /api/reports/admin-overview returns exact database counts and is Admin
     reviewers: roleCounts.reviewer || 0,
     users: roleCounts.user || 0
   });
+  assert.deepStrictEqual(
+    response.body.attention.slice(0, 2).map((report) => report._id),
+    attentionCases.slice(0, 2).map((report) => report._id.toString()),
+    'unclaimed cases should be ranked by urgency before age'
+  );
+  assert.ok(response.body.attention.every((report) => ![
+    attentionCases[2]._id.toString(),
+    attentionCases[3]._id.toString(),
+    attentionCases[4]._id.toString()
+  ].includes(report._id)));
 });
 
 test('POST /api/reports rejects a submission missing required fields', async () => {

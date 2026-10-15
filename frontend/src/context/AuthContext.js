@@ -20,9 +20,13 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     refresh();
+  }, [refresh]);
+
+  useEffect(() => {
+    if (!user) return undefined;
     const timer = window.setInterval(refresh, 10000);
     return () => window.clearInterval(timer);
-  }, [refresh]);
+  }, [refresh, user]);
 
   const login = async (email, password) => {
     const res = await api.post('/auth/login', { email, password });

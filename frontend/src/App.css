@@ -382,6 +382,16 @@ h2 {
   gap: 24px;
 }
 
+.kw-admin-access {
+  margin: 0;
+}
+
+.kw-admin-signin-link {
+  display: inline-block;
+  margin-top: 12px;
+  text-decoration: none;
+}
+
 .kw-admin-heading,
 .kw-admin-section-heading {
   display: flex;
@@ -479,6 +489,65 @@ h2 {
   margin: 6px 0 0;
 }
 
+.kw-admin-attention {
+  margin: 0;
+}
+
+.kw-admin-attention-list {
+  list-style: none;
+  margin: 18px 0 0;
+  padding: 0;
+}
+
+.kw-admin-attention-item {
+  align-items: center;
+  border-top: 1px solid var(--kw-border);
+  display: flex;
+  gap: 18px;
+  justify-content: space-between;
+  padding: 15px 0;
+}
+
+.kw-admin-attention-copy,
+.kw-admin-attention-actions {
+  align-items: flex-start;
+  display: flex;
+  gap: 8px 12px;
+}
+
+.kw-admin-attention-copy {
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.kw-admin-attention-copy strong {
+  color: var(--kw-navy);
+  overflow-wrap: anywhere;
+}
+
+.kw-admin-attention-meta {
+  color: var(--kw-text-muted);
+  font-size: 0.84rem;
+}
+
+.kw-admin-attention-actions {
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.kw-admin-case-link {
+  color: var(--kw-teal-dark);
+  font-size: 0.88rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.kw-admin-no-attention {
+  color: var(--kw-text-muted);
+  margin: 22px 0 4px;
+}
+
 .kw-admin-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -551,6 +620,16 @@ h2 {
   .kw-admin-metrics,
   .kw-admin-actions {
     grid-template-columns: 1fr;
+  }
+
+  .kw-admin-attention-item {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .kw-admin-attention-actions {
+    justify-content: space-between;
+    width: 100%;
   }
 
   .kw-admin-status-list {

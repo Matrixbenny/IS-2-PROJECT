@@ -47,8 +47,24 @@ function AdminDashboard() {
   }, [loadOverview, user]);
   usePolling(loadOverview);
 
-  if (!user || user.role !== 'admin') {
-    return <div className="kw-helper">This page is only available to Admins.</div>;
+  if (!user) {
+    return (
+      <section className="kw-page-card kw-admin-access" aria-labelledby="admin-access-heading">
+        <h2 id="admin-access-heading">Admin sign-in required</h2>
+        <p className="kw-helper">Sign in with an Admin account to view system activity and manage the platform.</p>
+        <Link className="kw-btn kw-admin-signin-link" to="/login">Sign in</Link>
+      </section>
+    );
+  }
+
+  if (user.role !== 'admin') {
+    return (
+      <section className="kw-page-card kw-admin-access" aria-labelledby="admin-access-heading">
+        <h2 id="admin-access-heading">Admin access only</h2>
+        <p className="kw-helper">Your account does not have permission to view this page.</p>
+        <Link to="/">Return to the public home page</Link>
+      </section>
+    );
   }
 
   const pendingReview = overview
@@ -99,6 +115,45 @@ function AdminDashboard() {
                 <dd>{overview.reports.archived}</dd>
               </div>
             </dl>
+          </section>
+
+          <section className="kw-page-card kw-admin-attention" aria-labelledby="attention-heading">
+            <div className="kw-admin-section-heading">
+              <div>
+                <h3 id="attention-heading">Unclaimed cases to review</h3>
+                <p className="kw-helper">Open cases are ranked by urgency, then by age. Classification is a triage aid, not a decision.</p>
+              </div>
+              <Link to="/reviewer-queue">View full queue</Link>
+            </div>
+            {overview.attention.length === 0 ? (
+              <p className="kw-admin-no-attention">No unclaimed active cases need review.</p>
+            ) : (
+              <ul className="kw-admin-attention-list">
+                {overview.attention.map((report) => (
+                  <li className="kw-admin-attention-item" key={report._id}>
+                    <div className="kw-admin-attention-copy">
+                      <span className="kw-tracking-chip">{report.trackingReference}</span>
+                      <strong>{report.title}</strong>
+                      <span className="kw-admin-attention-meta">
+                        {report.subCounty}, {report.county} · {report.status} · {new Date(report.createdAt).toLocaleDateString()}
+                      </span>
+                    </div>
+                    <div className="kw-admin-attention-actions">
+                      <span className={`kw-urgency-badge kw-urgency-${(report.classification?.urgency || 'low').toLowerCase()}`}>
+                        {report.classification?.urgency || 'Unclassified'}
+                      </span>
+                      <Link
+                        to="/reviewer-queue"
+                        state={{ focusReportId: report._id }}
+                        className="kw-admin-case-link"
+                      >
+                        Open case
+                      </Link>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
           </section>
 
           <section aria-labelledby="admin-actions-heading">

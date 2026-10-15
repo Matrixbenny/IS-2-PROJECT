@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import api from '../api';
 import { useAuth } from '../context/AuthContext';
 import EvidenceDownloads from '../components/EvidenceDownloads';
@@ -205,6 +206,8 @@ function CaseDetail({ report, agencies, onChanged, isAdmin }) {
 
 function ReviewerQueue() {
   const { user } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [reports, setReports] = useState([]);
   const [agencies, setAgencies] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
@@ -220,6 +223,13 @@ function ReviewerQueue() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
   usePolling(load);
+
+  useEffect(() => {
+    const focusReportId = location.state?.focusReportId;
+    if (!focusReportId || !reports.some((report) => report._id === focusReportId)) return;
+    setSelectedId(focusReportId);
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location.pathname, location.state, navigate, reports]);
 
   if (!user || !['reviewer', 'admin'].includes(user.role)) {
     return <div className="kw-helper">This page is only available to Reviewers and Admins.</div>;
@@ -240,7 +250,7 @@ function ReviewerQueue() {
       {error && <div className="error">{error}</div>}
       <div className="reports-list">
         {reports.map((r) => (
-          <div className="report-card kw-pro-card" key={r._id}>
+          <div className="report-card kw-pro-card" key={r._id} id={`report-${r._id}`}>
             <div className="kw-pro-card-row">
               <h3>{r.title}</h3>
               <span className={`kw-status-badge ${statusClass(r.status)}`}>{r.status}</span>
