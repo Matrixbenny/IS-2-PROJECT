@@ -299,7 +299,7 @@ Requiring anonymous citizens to know and type a consistent tagging taxonomy is u
 
 ### 15. Reviewer/Admin accounts are provisioned internally, never through public self-registration
 
-Only the optional citizen account (Path B) is open to public self-registration, and it always defaults to the `user` role. A single bootstrap Admin account is created outside the public app during initial deployment (a secured setup step, replacing today's insecure `manage-db.js` pattern). That Admin can then create further Admin and Reviewer accounts through an internal "Manage Users" screen — there is no public sign-up path to either of those roles.
+Only the optional citizen account (Path B) is open to public self-registration, and it always defaults to the `user` role. The single Admin identity is configured outside the public app through the server-only `ADMIN_EMAIL` setting, with its salted password hash stored in MongoDB. Public registration reserves that email, and Admin sessions are rejected if the account no longer matches the configured identity. Admins can create Reviewer accounts and change User/Reviewer roles in "Manage Users", but cannot create, promote, reassign, or delete the fixed Admin account. Initial Admin provisioning is a one-time command-line setup step; its password is read from a temporary environment variable rather than embedded in source code or command arguments.
 
 ### 16. Related reports can be linked, but are never automatically merged
 
@@ -399,7 +399,7 @@ Every report now captures when the incident actually happened, as its own field,
 
 - **Citizen** — Path A (anonymous, no account, uses Tracking Reference + Access Key) or Path B (optional registered account, JWT login). Submits reports; checks back for status, follow-up, and resolution confirmation.
 - **Reviewer** — claims cases from the shared queue, triages with ML assistance, updates status (with required resolution notes), adds comments, refers cases to Agencies, links related cases. Never sees a Path B reporter's real identity.
-- **Admin** — provisions Reviewer/Admin accounts, executes Court-Ordered Disclosures, views analytics, handles system configuration and Reviewer reassignment/escalations.
+- **Admin** — provisions Reviewer accounts, executes Court-Ordered Disclosures, views analytics, handles system configuration and Reviewer reassignment/escalations.
 - **ML Classification Module** — internal, automated, asynchronous actor. Produces `classification.category`/urgency/tags per report; never blocks the core workflow if unavailable.
 - **Agency/Institution** (EACC, DCI, Office of the Auditor-General, Ombudsman, Public Service Commission) — external secondary actor. Receives referrals and provides real-world updates manually relayed back by a Reviewer/Admin; no live system integration.
 - **Court** — external actor. Issues disclosure orders that are manually actioned by an Admin; holds no system account.

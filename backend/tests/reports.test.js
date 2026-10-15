@@ -14,6 +14,11 @@ const TEST_MONGO_URI = process.env.TEST_MONGO_URI || 'mongodb://localhost:27017/
 
 let app;
 
+async function loginAsAdmin(email, password) {
+  process.env.ADMIN_EMAIL = email;
+  return request(app).post('/api/auth/login').send({ email, password });
+}
+
 test.before(async () => {
   await mongoose.connect(TEST_MONGO_URI);
   app = createApp();
@@ -125,10 +130,7 @@ test('GET /api/reports/admin-overview returns exact database counts and is Admin
     password: 'StrongPassw0rd!',
     role: 'admin'
   });
-  const adminLogin = await request(app).post('/api/auth/login').send({
-    email: admin.email,
-    password: 'StrongPassw0rd!'
-  });
+  const adminLogin = await loginAsAdmin(admin.email, 'StrongPassw0rd!');
   const adminCookie = adminLogin.headers['set-cookie'].find((value) => value.startsWith('kw_token=')).split(';')[0];
   const response = await request(app)
     .get('/api/reports/admin-overview')
@@ -383,10 +385,7 @@ test('DELETE /api/reports/:id archives a report, retaining its audit record and 
     password: 'StrongPassw0rd!',
     role: 'admin'
   });
-  const login = await request(app).post('/api/auth/login').send({
-    email: admin.email,
-    password: 'StrongPassw0rd!'
-  });
+  const login = await loginAsAdmin(admin.email, 'StrongPassw0rd!');
   assert.strictEqual(login.status, 200);
   const cookie = login.headers['set-cookie'].find((value) => value.startsWith('kw_token=')).split(';')[0];
 
@@ -430,10 +429,7 @@ test('DELETE /api/reports/:id refuses to archive reports under legal hold', asyn
     password: 'StrongPassw0rd!',
     role: 'admin'
   });
-  const login = await request(app).post('/api/auth/login').send({
-    email: admin.email,
-    password: 'StrongPassw0rd!'
-  });
+  const login = await loginAsAdmin(admin.email, 'StrongPassw0rd!');
   assert.strictEqual(login.status, 200);
   const cookie = login.headers['set-cookie'].find((value) => value.startsWith('kw_token=')).split(';')[0];
 
@@ -451,10 +447,7 @@ test('archived reports can be restored or permanently deleted with their GridFS 
     password: 'StrongPassw0rd!',
     role: 'admin'
   });
-  const login = await request(app).post('/api/auth/login').send({
-    email: admin.email,
-    password: 'StrongPassw0rd!'
-  });
+  const login = await loginAsAdmin(admin.email, 'StrongPassw0rd!');
   assert.strictEqual(login.status, 200);
   const cookie = login.headers['set-cookie'].find((value) => value.startsWith('kw_token=')).split(';')[0];
 

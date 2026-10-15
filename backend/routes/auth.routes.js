@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const User = require('../user.model');
 const { signToken } = require('../utils/jwt');
 const { hashSecret, verifySecret } = require('../utils/tracking');
+const { normalizeEmail, getConfiguredAdminEmail, isConfiguredAdminEmail } = require('../utils/adminIdentity');
 const { sendMail } = require('../utils/mailer');
 const { attachUser, requireAuth } = require('../middleware/auth');
 
@@ -19,17 +20,21 @@ const cookieOptions = () => ({
 // Public self-registration always creates a 'user' role account (decision #15).
 router.post('/register', async (req, res) => {
   try {
-    const { name, email, password, emailNotificationsOptIn } = req.body;
+    const { name, email, password, emailNotificationsOptIn } = req.body || {};
     if (!name || !email || !password) {
       return res.status(400).json({ error: 'Name, email and password are required' });
     }
-    if (password.length < 8) {
+    if (typeof email !== 'string' || typeof password !== 'string' || password.length < 8) {
       return res.status(400).json({ error: 'Password must be at least 8 characters' });
     }
-    const existing = await User.findOne({ email: email.toLowerCase() });
+    const cleanEmail = normalizeEmail(email);
+    if (cleanEmail === getConfiguredAdminEmail()) {
+      return res.status(409).json({ error: 'An account with this email already exists' });
+    }
+    const existing = await User.findOne({ email: cleanEmail });
     if (existing) return res.status(409).json({ error: 'An account with this email already exists' });
 
-    const user = new User({ name, email, password, emailNotificationsOptIn: !!emailNotificationsOptIn });
+    const user = new User({ name, email: cleanEmail, password, emailNotificationsOptIn: !!emailNotificationsOptIn });
     await user.save();
 
     const token = signToken(user);
@@ -42,12 +47,17 @@ router.post('/register', async (req, res) => {
 
 router.post('/login', async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password } = req.body || {};
     if (!email || !password) return res.status(400).json({ error: 'Email and password are required' });
+    if (typeof email !== 'string' || typeof password !== 'string') {
+      return res.status(400).json({ error: 'Email and password are required' });
+    }
 
-    const user = await User.findOne({ email: email.toLowerCase() });
+    const user = await User.findOne({ email: normalizeEmail(email) });
     const valid = user ? await user.comparePassword(password) : false;
-    if (!valid) return res.status(401).json({ error: 'Invalid email or password' });
+    if (!valid || (user.role === 'admin' && !isConfiguredAdminEmail(user.email))) {
+      return res.status(401).json({ error: 'Invalid email or password' });
+    }
 
     const token = signToken(user);
     res.cookie(COOKIE_NAME, token, cookieOptions());

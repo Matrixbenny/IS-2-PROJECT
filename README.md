@@ -15,6 +15,7 @@ See [Docs/my IS story.md](Docs/my%20IS%20story.md) for the full set of 30 resear
 - Lightweight keyword-based ML classification (category + urgency), running asynchronously so it never blocks submission
 - Reviewer Queue: claim cases, update status (resolution requires a note + reference), refer to an Agency/Institution, link related cases; Admins can archive reports without destroying the audit record or evidence
 - Admin overview with live report, workflow, account, and escalation counts plus an urgency-ranked list of unclaimed cases; account management, archived-report controls, and data-retention/anonymization tooling
+- One configured Admin identity: Admin access is limited to `ADMIN_EMAIL`, while the salted password hash stays in MongoDB; public registration and account-management APIs cannot create, promote, reassign, or delete that Admin account
 - Public statistics page (aggregate-only) and a demo "Agency Partner Portal" concept prototype
 - English/Kiswahili language toggle
 - Security: helmet security headers, rate limiting, a self-hosted CAPTCHA for anonymous submissions, bcrypt password hashing, httpOnly JWT cookie auth
@@ -38,12 +39,13 @@ This project connects to MongoDB on port **27017**, using the `kenya_watch` data
 cd backend
 npm install
 ```
-Copy `.env` (already present for local dev) and adjust as needed:
+Copy `.env` (already present for local dev) and adjust as needed. `ADMIN_EMAIL` is the one allowed Admin identity; it is reserved from public registration. Do not put Admin passwords in source code or commit them. Admin passwords are stored as salted hashes in MongoDB.
 ```
 PORT=5000
 MONGO_URI=mongodb://localhost:27017/kenya_watch
 JWT_SECRET=<replace-with-a-long-random-string-before-any-real-deployment>
 JWT_EXPIRES_IN=7d
+ADMIN_EMAIL=<the single Admin account email>
 NODE_ENV=development
 ```
 Run the server:
@@ -52,10 +54,14 @@ npm start
 ```
 The API is now available at `http://localhost:5000`. The demo Agency Partner Portal is served at `http://localhost:5000/agency-portal/`.
 
-Create the first Admin account (one-time, command-line only - refuses to run if an admin already exists):
+Create the first Admin account (one-time, command-line only - the email must match `ADMIN_EMAIL`, and the script refuses to run if an account or Admin already exists):
 ```powershell
-node scripts/bootstrap-admin.js "Full Name" "admin@example.com" "StrongPassw0rd!"
+$securePassword = Read-Host "Admin password" -AsSecureString
+$env:ADMIN_BOOTSTRAP_PASSWORD = [System.Net.NetworkCredential]::new("", $securePassword).Password
+node scripts/bootstrap-admin.js "Full Name" "admin@example.com"
+Remove-Item Env:ADMIN_BOOTSTRAP_PASSWORD
 ```
+The Admin password is entered without echoing it or placing it in the command history/process arguments. For an existing Admin account, use its configured email and password at `/login`; do not run the bootstrap script.
 
 ### 3. Frontend
 ```powershell
@@ -87,7 +93,7 @@ npm test -- --watchAll=false
 ```
 
 ## Maintenance Scripts (backend/scripts/)
-- `bootstrap-admin.js "Name" "email" "password"` — one-time Admin account creation
+- `bootstrap-admin.js "Name" "email"` — one-time Admin account creation; reads the password from `ADMIN_BOOTSTRAP_PASSWORD`
 - `anonymize-expired.js [retentionDays=90]` — severs the identity link on long-resolved Path B reports past the retention window (skips cases flagged under legal hold); intended to be run periodically (e.g. via a scheduled task), not automatically
 
 ## Project Structure

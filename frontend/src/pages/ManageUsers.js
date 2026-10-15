@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 function ManageUsers() {
   const { user } = useAuth();
   const [users, setUsers] = useState([]);
-  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'reviewer' });
+  const [form, setForm] = useState({ name: '', email: '', password: '' });
   const [editing, setEditing] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -42,7 +42,7 @@ function ManageUsers() {
     try {
       const res = await api.post('/users', form);
       setUsers((current) => [res.data, ...current]);
-      setForm({ name: '', email: '', password: '', role: 'reviewer' });
+      setForm({ name: '', email: '', password: '' });
     } catch (err) {
       setError(err.response?.data?.error || err.message);
     } finally {
@@ -86,10 +86,12 @@ function ManageUsers() {
   return (
     <div>
       <h2>Manage Users</h2>
-      <div className="kw-helper" style={{ marginBottom: 14 }}>Provision Reviewer and Admin accounts here - there is no public sign-up path to these roles.</div>
+      <div className="kw-helper" style={{ marginBottom: 14 }}>
+        Create reviewer accounts here. The single Admin identity is configured outside the app and cannot be created, reassigned, or removed from this page.
+      </div>
 
       <form className="kw-pro-form report-form" onSubmit={handleCreate}>
-        <h4 style={{ marginTop: 0 }}>Create Reviewer/Admin Account</h4>
+        <h4 style={{ marginTop: 0 }}>Create Reviewer Account</h4>
         <div className="kw-form-section">
           <label>Full name</label>
           <input name="name" value={form.name} onChange={handleChange} required />
@@ -101,13 +103,6 @@ function ManageUsers() {
         <div className="kw-form-section">
           <label>Password</label>
           <input name="password" type="password" minLength={8} value={form.password} onChange={handleChange} required />
-        </div>
-        <div className="kw-form-section">
-          <label>Role</label>
-          <select name="role" value={form.role} onChange={handleChange}>
-            <option value="reviewer">Reviewer</option>
-            <option value="admin">Admin</option>
-          </select>
         </div>
         <button type="submit" disabled={loading}>{loading ? 'Creating...' : 'Create Account'}</button>
         {error && <div className="error">{error}</div>}
@@ -132,20 +127,25 @@ function ManageUsers() {
                 ) : u.email}</td>
                 <td>{u.role}</td>
                 <td>
-                  <select value={u.role} onChange={(e) => handleRoleChange(u._id, e.target.value)}>
-                    <option value="user">user</option>
-                    <option value="reviewer">reviewer</option>
-                    <option value="admin">admin</option>
-                  </select>
-                  {editing?.id === u._id ? (
-                    <>
-                      <button type="button" onClick={handleProfileSave}>Save</button>
-                      <button type="button" onClick={() => setEditing(null)}>Cancel</button>
-                    </>
+                  {u.role === 'admin' ? (
+                    <span className="kw-helper">Protected Admin account</span>
                   ) : (
-                    <button type="button" onClick={() => setEditing({ id: u._id, name: u.name, email: u.email })}>Edit</button>
+                    <>
+                      <select value={u.role} onChange={(e) => handleRoleChange(u._id, e.target.value)}>
+                        <option value="user">user</option>
+                        <option value="reviewer">reviewer</option>
+                      </select>
+                      {editing?.id === u._id ? (
+                        <>
+                          <button type="button" onClick={handleProfileSave}>Save</button>
+                          <button type="button" onClick={() => setEditing(null)}>Cancel</button>
+                        </>
+                      ) : (
+                        <button type="button" onClick={() => setEditing({ id: u._id, name: u.name, email: u.email })}>Edit</button>
+                      )}
+                      <button type="button" onClick={() => handleDelete(u)}>Delete</button>
+                    </>
                   )}
-                  <button type="button" onClick={() => handleDelete(u)}>Delete</button>
                 </td>
               </tr>
             ))}

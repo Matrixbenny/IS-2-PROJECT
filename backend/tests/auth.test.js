@@ -10,26 +10,41 @@ const Report = require('../report.model');
 const TEST_MONGO_URI = process.env.TEST_MONGO_URI || 'mongodb://localhost:27017/kenya_watch_test';
 
 let app;
+let authTestAddress = 10;
+
+function authPost(path) {
+  authTestAddress += 1;
+  return request(app)
+    .post(path)
+    .set('X-Forwarded-For', `198.51.100.${authTestAddress}`);
+}
+
+async function loginAsAdmin(email, password) {
+  process.env.ADMIN_EMAIL = email;
+  return authPost('/api/auth/login').send({ email, password });
+}
 
 test.before(async () => {
   await mongoose.connect(TEST_MONGO_URI);
   app = createApp();
+  app.set('trust proxy', 1);
 });
 
 test.after(async () => {
   await mongoose.connection.db.dropDatabase();
   await mongoose.disconnect();
+  authTestAddress = 10;
 });
 
 test('POST /api/auth/register rejects a password shorter than 8 characters', async () => {
-  const res = await request(app).post('/api/auth/register').send({
+  const res = await authPost('/api/auth/register').send({
     name: 'Test User', email: 'short-pass@example.com', password: 'abc123'
   });
   assert.strictEqual(res.status, 400);
 });
 
 test('POST /api/auth/register creates a Path B account and sets an httpOnly session cookie', async () => {
-  const res = await request(app).post('/api/auth/register').send({
+  const res = await authPost('/api/auth/register').send({
     name: 'Test User', email: 'testuser@example.com', password: 'StrongPassw0rd!'
   });
   assert.strictEqual(res.status, 201);
@@ -46,14 +61,122 @@ test('POST /api/auth/register creates a Path B account and sets an httpOnly sess
 });
 
 test('POST /api/auth/register rejects a duplicate email', async () => {
-  const res = await request(app).post('/api/auth/register').send({
+  const res = await authPost('/api/auth/register').send({
     name: 'Another User', email: 'testuser@example.com', password: 'StrongPassw0rd!'
   });
   assert.strictEqual(res.status, 409);
 });
 
+test('Admin identity is reserved and registration cannot assign the Admin role', async () => {
+  const admin = await User.create({
+    name: 'Configured Admin',
+    email: 'fixed-admin@example.com',
+    password: 'StrongPassw0rd!',
+    role: 'admin'
+  });
+
+  const previousAdminEmail = process.env.ADMIN_EMAIL;
+  process.env.ADMIN_EMAIL = admin.email;
+  try {
+    const reserved = await authPost('/api/auth/register').send({
+      name: 'Impersonator',
+      email: ` ${admin.email.toUpperCase()} `,
+      password: 'OtherPassw0rd!'
+    });
+    assert.strictEqual(reserved.status, 409);
+
+    const ordinary = await authPost('/api/auth/register').send({
+      name: 'Ordinary User',
+      email: 'ordinary-role@example.com',
+      password: 'StrongPassw0rd!',
+      role: 'admin'
+    });
+    assert.strictEqual(ordinary.status, 201);
+    assert.strictEqual(ordinary.body.user.role, 'user');
+
+    const incorrect = await authPost('/api/auth/login').send({
+      email: admin.email,
+      password: 'WrongPassword!'
+    });
+    assert.strictEqual(incorrect.status, 401);
+
+    const correct = await loginAsAdmin(admin.email, 'StrongPassw0rd!');
+    assert.strictEqual(correct.status, 200);
+    assert.strictEqual(correct.body.user.role, 'admin');
+    const adminCookie = correct.headers['set-cookie'].find((value) => value.startsWith('kw_token=')).split(';')[0];
+
+    const disallowedAdminCreate = await request(app)
+      .post('/api/users')
+      .set('Cookie', adminCookie)
+      .send({
+        name: 'Another Admin',
+        email: 'another-admin@example.com',
+        password: 'StrongPassw0rd!',
+        role: 'admin'
+      });
+    assert.strictEqual(disallowedAdminCreate.status, 403);
+
+    const reservedReviewerEmail = await request(app)
+      .post('/api/users')
+      .set('Cookie', adminCookie)
+      .send({
+        name: 'Reserved Email',
+        email: admin.email,
+        password: 'OtherPassw0rd!'
+      });
+    assert.strictEqual(reservedReviewerEmail.status, 409);
+
+    const impersonatedEmail = await request(app)
+      .patch(`/api/users/${ordinary.body.user.id}`)
+      .set('Cookie', adminCookie)
+      .send({ email: admin.email });
+    assert.strictEqual(impersonatedEmail.status, 409);
+
+    const changedAdminEmail = await request(app)
+      .patch(`/api/users/${admin._id}`)
+      .set('Cookie', adminCookie)
+      .send({ email: 'alternate-admin@example.com' });
+    assert.strictEqual(changedAdminEmail.status, 409);
+
+    const deletedAdmin = await request(app)
+      .delete(`/api/users/${admin._id}`)
+      .set('Cookie', adminCookie);
+    assert.strictEqual(deletedAdmin.status, 409);
+  } finally {
+    if (previousAdminEmail === undefined) delete process.env.ADMIN_EMAIL;
+    else process.env.ADMIN_EMAIL = previousAdminEmail;
+    await User.deleteOne({ _id: admin._id });
+    await User.deleteOne({ email: 'ordinary-role@example.com' });
+  }
+});
+
+test('Admin session is rejected when it does not match the configured Admin identity', async () => {
+  const admin = await User.create({
+    name: 'Session Admin',
+    email: 'session-admin@example.com',
+    password: 'StrongPassw0rd!',
+    role: 'admin'
+  });
+  const login = await loginAsAdmin(admin.email, 'StrongPassw0rd!');
+  assert.strictEqual(login.status, 200);
+  const cookie = login.headers['set-cookie'].find((value) => value.startsWith('kw_token=')).split(';')[0];
+
+  const previousAdminEmail = process.env.ADMIN_EMAIL;
+  process.env.ADMIN_EMAIL = 'different-admin@example.com';
+  try {
+    const currentUser = await request(app).get('/api/auth/me').set('Cookie', cookie);
+    assert.strictEqual(currentUser.status, 401);
+    const adminOverview = await request(app).get('/api/reports/admin-overview').set('Cookie', cookie);
+    assert.strictEqual(adminOverview.status, 401);
+  } finally {
+    if (previousAdminEmail === undefined) delete process.env.ADMIN_EMAIL;
+    else process.env.ADMIN_EMAIL = previousAdminEmail;
+    await User.deleteOne({ _id: admin._id });
+  }
+});
+
 test('POST /api/auth/login rejects an incorrect password without revealing whether the account exists', async () => {
-  const res = await request(app).post('/api/auth/login').send({
+  const res = await authPost('/api/auth/login').send({
     email: 'testuser@example.com', password: 'WrongPassword!'
   });
   assert.strictEqual(res.status, 401);
@@ -61,7 +184,7 @@ test('POST /api/auth/login rejects an incorrect password without revealing wheth
 });
 
 test('POST /api/auth/login succeeds with the correct password', async () => {
-  const res = await request(app).post('/api/auth/login').send({
+  const res = await authPost('/api/auth/login').send({
     email: 'testuser@example.com', password: 'StrongPassw0rd!'
   });
   assert.strictEqual(res.status, 200);
@@ -80,10 +203,7 @@ test('Admin user CRUD updates account data, removes deleted users, and anonymize
     password: 'StrongPassw0rd!',
     role: 'admin'
   });
-  const login = await request(app).post('/api/auth/login').send({
-    email: admin.email,
-    password: 'StrongPassw0rd!'
-  });
+  const login = await loginAsAdmin(admin.email, 'StrongPassw0rd!');
   assert.strictEqual(login.status, 200);
   const cookie = login.headers['set-cookie'].find((value) => value.startsWith('kw_token=')).split(';')[0];
 
@@ -152,7 +272,8 @@ test('Admin user CRUD updates account data, removes deleted users, and anonymize
     .patch(`/api/users/${userId}/role`)
     .set('Cookie', cookie)
     .send({ role: 'admin' });
-  assert.strictEqual(promoted.status, 200);
+  assert.strictEqual(promoted.status, 403);
+  assert.strictEqual((await User.findById(userId)).role, 'reviewer');
 
   const listed = await request(app).get('/api/users').set('Cookie', cookie);
   const listedUser = listed.body.find((item) => item._id === userId);
@@ -188,20 +309,18 @@ test('Admins cannot delete themselves or remove the last Admin', async () => {
     password: 'StrongPassw0rd!',
     role: 'admin'
   });
-  const login = await request(app).post('/api/auth/login').send({
-    email: admin.email,
-    password: 'StrongPassw0rd!'
-  });
+  const login = await loginAsAdmin(admin.email, 'StrongPassw0rd!');
+  assert.strictEqual(login.status, 200);
   const cookie = login.headers['set-cookie'].find((value) => value.startsWith('kw_token=')).split(';')[0];
 
   const selfDelete = await request(app).delete(`/api/users/${admin._id}`).set('Cookie', cookie);
   assert.strictEqual(selfDelete.status, 409);
 
-  const demoteLastAdmin = await request(app)
+  const demoteAdmin = await request(app)
     .patch(`/api/users/${admin._id}/role`)
     .set('Cookie', cookie)
     .send({ role: 'reviewer' });
-  assert.strictEqual(demoteLastAdmin.status, 409);
+  assert.strictEqual(demoteAdmin.status, 409);
 
   const deleteLastAdmin = await request(app).delete(`/api/users/${admin._id}`).set('Cookie', cookie);
   assert.strictEqual(deleteLastAdmin.status, 409);

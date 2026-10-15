@@ -2,6 +2,7 @@ const express = require('express');
 const User = require('../user.model');
 const Report = require('../report.model');
 const { requireRole } = require('../middleware/auth');
+const { normalizeEmail, getConfiguredAdminEmail, isConfiguredAdminEmail } = require('../utils/adminIdentity');
 
 const router = express.Router();
 
@@ -17,23 +18,26 @@ router.get('/', requireRole('admin'), async (req, res) => {
   }
 });
 
-// POST /api/users - Admin provisions Reviewer/Admin accounts internally; no public sign-up path to these roles.
+// POST /api/users - Admin provisions Reviewer accounts; the configured Admin is bootstrapped out of band.
 router.post('/', requireRole('admin'), async (req, res) => {
   try {
-    const { name, email, password, role } = req.body || {};
+    const { name, email, password, role = 'reviewer' } = req.body || {};
     if (!name || !email || !password || !role) {
       return res.status(400).json({ error: 'Name, email, password and role are required' });
     }
-    if (!['reviewer', 'admin'].includes(role)) {
-      return res.status(400).json({ error: 'Role must be reviewer or admin' });
+    if (role !== 'reviewer') {
+      return res.status(403).json({ error: 'Admin accounts can only be created through the configured bootstrap process' });
     }
     if (typeof password !== 'string' || password.length < 8) {
       return res.status(400).json({ error: 'Password must be at least 8 characters' });
     }
     const cleanName = String(name).normalize('NFC').trim();
-    const cleanEmail = String(email).trim().toLowerCase();
+    const cleanEmail = normalizeEmail(email);
     if (!cleanName || cleanName.length > 120 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
       return res.status(400).json({ error: 'Enter a valid name and email address' });
+    }
+    if (cleanEmail === getConfiguredAdminEmail()) {
+      return res.status(409).json({ error: 'An account with this email already exists' });
     }
     const existing = await User.findOne({ email: cleanEmail });
     if (existing) return res.status(409).json({ error: 'An account with this email already exists' });
@@ -51,6 +55,8 @@ router.post('/', requireRole('admin'), async (req, res) => {
 router.patch('/:id', requireRole('admin'), async (req, res) => {
   try {
     const { name, email, emailNotificationsOptIn } = req.body || {};
+    const existingUser = await User.findById(req.params.id);
+    if (!existingUser) return res.status(404).json({ error: 'User not found' });
     const updates = {};
     if (name !== undefined) {
       if (typeof name !== 'string') return res.status(400).json({ error: 'Name must be text' });
@@ -60,8 +66,12 @@ router.patch('/:id', requireRole('admin'), async (req, res) => {
     }
     if (email !== undefined) {
       if (typeof email !== 'string') return res.status(400).json({ error: 'Email must be text' });
-      const cleanEmail = email.trim().toLowerCase();
+      const cleanEmail = normalizeEmail(email);
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) return res.status(400).json({ error: 'Enter a valid email address' });
+      if ((existingUser.role === 'admin' && !isConfiguredAdminEmail(cleanEmail)) ||
+        (existingUser.role !== 'admin' && cleanEmail === getConfiguredAdminEmail())) {
+        return res.status(409).json({ error: 'The configured Admin email cannot be reassigned' });
+      }
       updates.email = cleanEmail;
     }
     if (emailNotificationsOptIn !== undefined) {
@@ -85,18 +95,17 @@ router.patch('/:id', requireRole('admin'), async (req, res) => {
   }
 });
 
-// PATCH /api/users/:id/role - Admin can reassign a role (e.g. promote/demote reviewer <-> admin).
+// PATCH /api/users/:id/role - Admin can move accounts between user and reviewer, never grant Admin access.
 router.patch('/:id/role', requireRole('admin'), async (req, res) => {
   try {
     const { role } = req.body || {};
-    if (!['user', 'reviewer', 'admin'].includes(role)) {
-      return res.status(400).json({ error: 'Invalid role' });
+    if (!['user', 'reviewer'].includes(role)) {
+      return res.status(403).json({ error: 'Admin access cannot be granted through user management' });
     }
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ error: 'User not found' });
-    if (user.role === 'admin' && role !== 'admin') {
-      const adminCount = await User.countDocuments({ role: 'admin' });
-      if (adminCount <= 1) return res.status(409).json({ error: 'The last Admin account cannot be demoted' });
+    if (user.role === 'admin') {
+      return res.status(409).json({ error: 'The configured Admin account cannot be demoted' });
     }
     user.role = role;
     await user.save();
@@ -106,7 +115,7 @@ router.patch('/:id/role', requireRole('admin'), async (req, res) => {
   }
 });
 
-// DELETE /api/users/:id - removes the account and anonymizes its retained report references.
+// DELETE /api/users/:id - removes non-admin accounts and anonymizes their retained report references.
 router.delete('/:id', requireRole('admin'), async (req, res) => {
   try {
     if (req.params.id === req.user._id.toString()) {
@@ -114,8 +123,8 @@ router.delete('/:id', requireRole('admin'), async (req, res) => {
     }
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ error: 'User not found' });
-    if (user.role === 'admin' && await User.countDocuments({ role: 'admin' }) <= 1) {
-      return res.status(409).json({ error: 'The last Admin account cannot be deleted' });
+    if (user.role === 'admin') {
+      return res.status(409).json({ error: 'The configured Admin account cannot be deleted here' });
     }
 
     const userId = user._id;

@@ -18,8 +18,8 @@ function Login() {
     setError('');
     setLoading(true);
     try {
-      await login(form.email, form.password);
-      navigate('/');
+      const signedInUser = await login(form.email, form.password);
+      navigate(signedInUser.role === 'admin' ? '/admin' : '/');
     } catch (err) {
       setError(err.response?.data?.error || 'Login failed');
     }
