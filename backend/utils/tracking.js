@@ -15,11 +15,15 @@ function generateTrackingReference() {
   return `KW-${suffix}`;
 }
 
-// Diceware-style secret passphrase, e.g. purple-tiger-lemon-forest. Shown once, never stored raw.
+// Diceware-style secret passphrase, e.g. purple-tiger-lemon-forest, plus a random numeric
+// suffix block (e.g. ...-4271). Shown once, never stored raw. crypto.randomInt makes each
+// draw uniformly random; a single word may repeat across keys, so exactly two identical
+// full keys (4 words + 4 digits, ~2.7e11 combinations) is astronomically improbable.
 function generateAccessKey(wordCount = 4) {
   const chosen = [];
   for (let i = 0; i < wordCount; i++) chosen.push(WORDS[randomInt(WORDS.length)]);
-  return chosen.join('-');
+  const digits = String(crypto.randomInt(0, 10000)).padStart(4, '0');
+  return `${chosen.join('-')}-${digits}`;
 }
 
 async function hashSecret(plain) {

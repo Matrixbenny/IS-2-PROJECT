@@ -9,6 +9,9 @@ import App from './App';
 test('renders the Kenya Watch header and main navigation', async () => {
   render(<App />);
   expect(screen.getByText('Kenya Watch')).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: /skip to main content/i })).toBeInTheDocument();
+  expect(screen.getByRole('navigation', { name: /main navigation/i })).toBeInTheDocument();
+  expect(screen.getByRole('main')).toBeInTheDocument();
   expect(screen.getByRole('link', { name: /submit report/i })).toBeInTheDocument();
   await waitFor(() => expect(screen.getByRole('link', { name: /sign in/i })).toBeInTheDocument());
 });

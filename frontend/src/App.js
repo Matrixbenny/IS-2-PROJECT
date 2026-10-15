@@ -20,9 +20,41 @@ import { LanguageProvider, useLanguage } from './context/LanguageContext';
 function LanguageToggle() {
   const { language, changeLanguage } = useLanguage();
   return (
-    <div className="kw-lang-toggle">
-      <button type="button" className={language === 'en' ? 'active' : ''} onClick={() => changeLanguage('en')}>EN</button>
-      <button type="button" className={language === 'sw' ? 'active' : ''} onClick={() => changeLanguage('sw')}>SW</button>
+    <div className="kw-lang-toggle" role="group" aria-label="Choose language">
+      <button type="button" aria-pressed={language === 'en'} className={language === 'en' ? 'active' : ''} onClick={() => changeLanguage('en')}>EN</button>
+      <button type="button" aria-pressed={language === 'sw'} className={language === 'sw' ? 'active' : ''} onClick={() => changeLanguage('sw')}>SW</button>
+    </div>
+  );
+}
+
+function InstallPrompt() {
+  const [installPrompt, setInstallPrompt] = React.useState(null);
+
+  React.useEffect(() => {
+    const handleInstallAvailable = (event) => {
+      event.preventDefault();
+      setInstallPrompt(event);
+    };
+    const handleInstalled = () => setInstallPrompt(null);
+    window.addEventListener('beforeinstallprompt', handleInstallAvailable);
+    window.addEventListener('appinstalled', handleInstalled);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleInstallAvailable);
+      window.removeEventListener('appinstalled', handleInstalled);
+    };
+  }, []);
+
+  if (!installPrompt) return null;
+  return (
+    <div className="kw-install-prompt">
+      <span>Install Kenya Watch for quick access.</span>
+      <button type="button" className="kw-btn" onClick={async () => {
+        await installPrompt.prompt();
+        await installPrompt.userChoice;
+        setInstallPrompt(null);
+      }}>
+        Install app
+      </button>
     </div>
   );
 }
@@ -55,9 +87,10 @@ function AppShell() {
   return (
     <Router>
       <div className="App">
+        <a className="kw-skip-link" href="#main-content">Skip to main content</a>
         <header className="kw-header">
           <div className="kw-logo-circle">
-            <span role="img" aria-label="shield" className="kw-logo-emoji">🛡️</span>
+            <span aria-hidden="true" className="kw-logo-emoji">🛡️</span>
           </div>
           <div className="kw-branding">
             <h1>Kenya Watch</h1>
@@ -66,7 +99,7 @@ function AppShell() {
           <LanguageToggle />
           <HeaderUser />
         </header>
-        <nav className="kw-nav">
+        <nav className="kw-nav" aria-label="Main navigation">
           <NavLink to="/" end className="kw-nav-link">{t('nav_home')}</NavLink>
           <NavLink to="/submit" className="kw-nav-link">{t('nav_submit')}</NavLink>
           <NavLink to="/track" className="kw-nav-link">{t('nav_track')}</NavLink>
@@ -83,21 +116,24 @@ function AppShell() {
           )}
           <NavLink to="/about" className="kw-nav-link">{t('nav_about')}</NavLink>
         </nav>
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/submit" element={<SubmitReport />} />
-          <Route path="/track" element={<TrackReport />} />
-          <Route path="/stats" element={<Stats />} />
-          <Route path="/my-reports" element={<MyReports />} />
-          <Route path="/reviewer-queue" element={<ReviewerQueue />} />
-          <Route path="/manage-users" element={<ManageUsers />} />
-          <Route path="/escalations" element={<Escalations />} />
-          <Route path="/about" element={<About />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route path="/forgot-password" element={<ForgotPassword />} />
-          <Route path="/reset-password" element={<ResetPassword />} />
-        </Routes>
+        <InstallPrompt />
+        <main id="main-content" tabIndex="-1">
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/submit" element={<SubmitReport />} />
+            <Route path="/track" element={<TrackReport />} />
+            <Route path="/stats" element={<Stats />} />
+            <Route path="/my-reports" element={<MyReports />} />
+            <Route path="/reviewer-queue" element={<ReviewerQueue />} />
+            <Route path="/manage-users" element={<ManageUsers />} />
+            <Route path="/escalations" element={<Escalations />} />
+            <Route path="/about" element={<About />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
+          </Routes>
+        </main>
       </div>
     </Router>
   );

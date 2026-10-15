@@ -1,6 +1,10 @@
-# The Full Story of Kenya Watch — From Nothing to What Exists Today
+# The Full Story of Kenya Watch — Implementation and Design Decisions
 
-This story is built only from what is actually in the project — both codebases, both model files, the database helper script, the frontend pages, the CSS, the package files, and the official proposal/methodology chapters — not assumption. Where the *proposal* describes something that does **not** exist in the actual code yet, that is said explicitly, because that gap matters enormously for the diagrams that come next.
+> **Current implementation snapshot:** Kenya Watch now uses a React frontend, an Express/Mongoose API, and MongoDB on port 27017. Citizens can submit anonymous or account-linked reports, upload evidence, track cases with a Tracking Reference and Access Key, and install the site as a PWA. Registration and staff account provisioning are implemented; passwords are hashed with bcrypt. Reviewers/Admins can manage case workflows, and Admins can archive reports without physically deleting the audit record or evidence. Incoming report fields are normalized and validated; unknown allegation details are kept unknown rather than imputed. The current classifier is a keyword-based triage aid, **not a trained or validated ML model**. No approved labeled training dataset is present in the repository.
+>
+> **Document status:** Parts 1–11 below are a historical baseline written before the current implementation and are retained as project history, not as a description of the running system. Part 12 onward records design decisions; those decisions are not proof that every proposed safeguard or feature is implemented. For current behavior, use the source code and the setup/limitations in [README.md](../README.md).
+
+This story records the project's initial state and the design decisions that shaped its development. It distinguishes the original baseline from the current implementation so the proposal, code, and future ML evaluation are not confused.
 
 ---
 
@@ -64,7 +68,7 @@ This is the complete, real schema. There is no separate "Evidence" collection, n
 
 ## Part 4 — The backend server, exactly as it behaves today
 
-`backend/index.js` is a small Express app. It connects to MongoDB at `mongodb://localhost:27018/kenya_watch` — note the **non-default port 27018** (standard MongoDB is 27017), so this project expects Mongo to be configured or tunneled onto a custom port. The database name is `kenya_watch`.
+`backend/index.js` is a small Express app. It connects to MongoDB at `mongodb://localhost:27017/kenya_watch`. The database name is `kenya_watch`.
 
 There are exactly **three routes** wired up, and only three:
 1. `GET /` — a plain health-check that just returns the text "Kenya Watch backend is running!"
@@ -169,7 +173,7 @@ A specific test case from the plan is worth highlighting because it directly ack
 
 ## Part 10 — Tech stack and environment, exactly as configured
 
-**Backend** (`backend/package.json`): `express ^5.2.1`, `mongoose ^9.6.1`. Started with `node index.js` / `npm start`. Talks to MongoDB on `localhost:27018` (custom port), database `kenya_watch`.
+**Backend** (`backend/package.json`): `express ^5.2.1`, `mongoose ^9.6.1`. Started with `node index.js` / `npm start`. Talks to MongoDB on `localhost:27017`, database `kenya_watch`.
 
 **Frontend** (`frontend/package.json`): `react ^19.2.5`, `react-dom ^19.2.5`, `react-router-dom ^7.14.2`, `react-scripts 5.0.1`, plus testing-library packages and `web-vitals`. `axios` is used in code but is **missing from this dependency list** — worth fixing separately. Started with `npm start` (default Create React App dev server, typically port 3000). The frontend calls the backend at a hardcoded `http://localhost:5000` — there's no `.env`/config file for this base URL, it's a literal string in `App.js`.
 
@@ -195,7 +199,7 @@ A specific test case from the plan is worth highlighting because it directly ack
 
 ## Part 12 — Resolved design decisions for the target system
 
-Thirty scope questions have now been decided, and they change what the upcoming diagrams will show compared to Parts 1–11 above (which describe the code exactly as it exists today). From this point on, unresolved design questions are worked through by researching the real legal, institutional, or technical constraints first, then designing a solution grounded in that research — not by guessing.
+Thirty scope questions were recorded during design. Parts 1–11 above describe the project's historical starting point, not the current code. Individual decisions below may since have been implemented, refined, or deferred; a design decision alone is not evidence that a feature is shipped. Unresolved questions should be worked through against real legal, institutional, and technical constraints rather than assumptions.
 
 ### 1. The diagrams model the full target system, not the current bare-bones code
 
@@ -315,7 +319,7 @@ Each evidence file is validated against an explicit allow-list per format — im
 
 ### 19. Passwords are hashed with bcrypt before storage — never stored in plain text
 
-This directly fixes the defect flagged in Part 2: the current code's own comment already says "Use bcrypt in real apps" but never implements it. The target design hashes every password with bcrypt (a sufficiently high cost factor, e.g. 10–12 rounds) before it is ever written to the `User` collection, for all three real login roles — Path B citizen accounts, Reviewers, and Admins. A minimum password-strength policy is enforced at registration. Anonymous Path A submissions never touch this at all, since no account or password is involved.
+**Implemented:** `backend/user.model.js` hashes modified passwords with bcryptjs (11 rounds) in a Mongoose save hook, which covers public registration, staff account provisioning, bootstrap, and password reset. The auth integration test verifies the stored value is a bcrypt hash and that only the original password compares successfully. Public self-registration always creates a `user` role; staff roles are provisioned internally. Anonymous reports do not require an account or password.
 
 ### 20. Authentication uses a JWT delivered via an httpOnly, secure cookie — not client-side storage
 

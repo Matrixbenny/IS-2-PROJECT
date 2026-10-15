@@ -9,9 +9,11 @@ See [Docs/my IS story.md](Docs/my%20IS%20story.md) for the full set of 30 resear
 ## Features
 - Anonymous (Path A) or optional-account (Path B) corruption reporting, with category-specific fields grounded in the Anti-Corruption and Economic Crimes Act
 - Evidence upload (images/video/audio/documents) via MongoDB GridFS, with automatic EXIF/metadata stripping and malware-signature scanning
+- Optional live audio/video recording during report submission, with recording segments saved to GridFS while recording
+- Installable Progressive Web App (PWA) for supported browsers; the offline shell does not cache API or report data
 - Tracking Reference + Access Key capability-based case tracking for anonymous reporters, with a general/deep visibility split
 - Lightweight keyword-based ML classification (category + urgency), running asynchronously so it never blocks submission
-- Reviewer Queue: claim cases, update status (resolution requires a note + reference), refer to an Agency/Institution, link related cases
+- Reviewer Queue: claim cases, update status (resolution requires a note + reference), refer to an Agency/Institution, link related cases; Admins can archive reports without destroying the audit record or evidence
 - Admin: provision Reviewer/Admin accounts, escalation alerts for unclaimed high-urgency cases, data-retention/anonymization tooling
 - Public statistics page (aggregate-only) and a demo "Agency Partner Portal" concept prototype
 - English/Kiswahili language toggle
@@ -29,10 +31,7 @@ See [Docs/my IS story.md](Docs/my%20IS%20story.md) for the full set of 30 resear
 ## Getting Started
 
 ### 1. Start MongoDB
-This project expects MongoDB on port **27018** (not the default 27017), with data stored locally:
-```powershell
-& "C:\Program Files\MongoDB\Server\<version>\bin\mongod.exe" --dbpath "<repo>\backend\data" --port 27018
-```
+This project connects to MongoDB on port **27017**, using the `kenya_watch` database. Make sure your MongoDB service is running on that port. Do not start a second `mongod` process on port 27017 if another MongoDB instance is already using it.
 
 ### 2. Backend
 ```powershell
@@ -42,7 +41,7 @@ npm install
 Copy `.env` (already present for local dev) and adjust as needed:
 ```
 PORT=5000
-MONGO_URI=mongodb://localhost:27018/kenya_watch
+MONGO_URI=mongodb://localhost:27017/kenya_watch
 JWT_SECRET=<replace-with-a-long-random-string-before-any-real-deployment>
 JWT_EXPIRES_IN=7d
 NODE_ENV=development
@@ -65,6 +64,12 @@ npm install
 npm start
 ```
 The app opens at `http://localhost:3000`.
+
+### Install the app
+In a supported browser, open the website and use the browser's **Install app** option (or the in-app install prompt when available). The PWA requires HTTPS outside localhost. Its service worker caches only the public application shell and static assets; API responses, submitted reports, and evidence are not cached. Recording requires camera/microphone permission and HTTPS or localhost. Recordings are limited to 10 minutes or 100 MB and must be attached to a report within two hours.
+
+### Accessibility
+The interface includes keyboard skip navigation, visible focus styles, semantic landmarks, reduced-motion support, and screen-reader announcements for recording/upload status. Accessibility improvements target WCAG 2.2 AA practices; the project has not undergone a formal conformance audit.
 
 ## Running Tests
 
@@ -97,6 +102,9 @@ Docs/         Proposal, literature review, methodology, and the full design-deci
 - The malware scan on evidence uploads checks for the EICAR test signature only (a real deployment would run a dedicated engine such as ClamAV)
 - Password-reset and status-change emails send over real SMTP to a disposable Ethereal sandbox inbox, not a real mail provider (no production email credentials are available to this project)
 - The Agency Partner Portal is a labelled concept/demo prototype — there is no live integration with any real government institution
+- The current classifier is a keyword-based triage aid, not a trained or validated machine-learning model. The repository contains no approved labeled training dataset, so no model-performance claims should be made or the suggestions used as automated enforcement decisions.
+- Report intake normalizes whitespace and Unicode for structured fields, validates dates and category-specific values, and leaves optional facts blank when they are not provided. It does not impute allegations, dates, identities, or demographics. Training-data cleaning and imputation must be designed against the actual, approved dataset; missing target labels must not be invented, and any feature imputation must be fitted on training data only.
+- Report deletion is an Admin-only soft archive. It hides the report from active views and public statistics while retaining the record and evidence for audit; reports under legal hold cannot be archived.
 
 ---
 

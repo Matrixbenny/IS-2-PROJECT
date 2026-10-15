@@ -4,8 +4,9 @@ const mongoose = require('mongoose');
 const request = require('supertest');
 require('dotenv').config();
 const createApp = require('../app');
+const User = require('../user.model');
 
-const TEST_MONGO_URI = process.env.TEST_MONGO_URI || 'mongodb://localhost:27018/kenya_watch_test';
+const TEST_MONGO_URI = process.env.TEST_MONGO_URI || 'mongodb://localhost:27017/kenya_watch_test';
 
 let app;
 
@@ -35,6 +36,12 @@ test('POST /api/auth/register creates a Path B account and sets an httpOnly sess
   const cookie = res.headers['set-cookie'].find((c) => c.startsWith('kw_token='));
   assert.ok(cookie, 'Login must set the kw_token cookie');
   assert.match(cookie, /HttpOnly/i);
+
+  const user = await User.findOne({ email: 'testuser@example.com' });
+  assert.ok(user.password !== 'StrongPassw0rd!', 'Passwords must not be stored in plaintext');
+  assert.match(user.password, /^\$2[aby]\$11\$/, 'Passwords must use salted bcrypt with the configured work factor');
+  assert.strictEqual(await user.comparePassword('StrongPassw0rd!'), true);
+  assert.strictEqual(await user.comparePassword('WrongPassword!'), false);
 });
 
 test('POST /api/auth/register rejects a duplicate email', async () => {

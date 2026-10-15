@@ -2,10 +2,11 @@
 // Node.js script to manage kenya_watch MongoDB database using Mongoose
 
 const mongoose = require('mongoose');
+require('dotenv').config();
 const Report = require('./report.model');
 const User = require('./user.model');
 
-const MONGO_URI = 'mongodb://localhost:27018/kenya_watch';
+const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/kenya_watch';
 
 async function main() {
   await mongoose.connect(MONGO_URI);

@@ -41,7 +41,7 @@ async function storeEvidenceFile(bucket, file) {
   return new Promise((resolve, reject) => {
     const uploadStream = bucket.openUploadStream(file.originalname, {
       contentType: file.mimetype,
-      metadata: { type }
+      metadata: { type, contentType: file.mimetype }
     });
     bufferToStream(cleanBuffer)
       .pipe(uploadStream)

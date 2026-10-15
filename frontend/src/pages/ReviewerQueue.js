@@ -89,6 +89,23 @@ function CaseDetail({ report, agencies, onChanged, isAdmin }) {
     setBusy(false);
   };
 
+  const handleArchive = async () => {
+    const confirmed = window.confirm(
+      'Archive this report? It will disappear from active views, but its audit history and evidence will be retained.'
+    );
+    if (!confirmed) return;
+
+    setBusy(true);
+    setError('');
+    try {
+      await api.delete(`/reports/${report._id}`);
+      onChanged({ _id: report._id, archived: true });
+    } catch (err) {
+      setError(err.response?.data?.error || err.message);
+    }
+    setBusy(false);
+  };
+
   return (
     <div className="kw-case-detail">
       <div className="kw-pro-meta"><b>Description:</b> {report.description}</div>
@@ -108,6 +125,10 @@ function CaseDetail({ report, agencies, onChanged, isAdmin }) {
             <input type="checkbox" style={{ width: 'auto' }} checked={!!report.legalHold} onChange={handleLegalHoldToggle} disabled={busy} />
             Under active legal hold (exempt from identity anonymization)
           </label>
+          {report.legalHold && <div className="kw-helper">Remove the legal hold before archiving this report.</div>}
+          <button type="button" className="kw-btn kw-btn-secondary" onClick={handleArchive} disabled={busy || report.legalHold}>
+            Archive Report
+          </button>
         </div>
       )}
 
@@ -201,6 +222,11 @@ function ReviewerQueue() {
   }
 
   const handleChanged = (updated) => {
+    if (updated.archived) {
+      setReports(reports.filter((r) => r._id !== updated._id));
+      setSelectedId(null);
+      return;
+    }
     setReports(reports.map((r) => (r._id === updated._id ? updated : r)));
   };
 

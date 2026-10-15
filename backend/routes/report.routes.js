@@ -1,4 +1,5 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const Report = require('../report.model');
 const User = require('../user.model');
 const { CATEGORIES, CATEGORY_FIELDS } = require('../utils/categories');
@@ -10,7 +11,9 @@ const { getBucket } = require('../utils/gridfs');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { AGENCIES, suggestAgencyForCategory } = require('../utils/agencies');
 const { sendMail } = require('../utils/mailer');
-const { generateChallenge, verifyChallenge } = require('../utils/captcha');
+const { generateChallenge, verifyChallenge, evaluateBehavior, issueBehaviorToken } = require('../utils/captcha');
+const { generateImageChallenge, verifyImageSelection } = require('../utils/imageCaptcha');
+const { hashRecordingToken } = require('../utils/recordingToken');
 
 const router = express.Router();
 
@@ -18,9 +21,24 @@ function pickCategoryDetails(reportedCategory, submitted = {}) {
   const allowedFields = (CATEGORY_FIELDS[reportedCategory] || []).map((f) => f.name);
   const clean = {};
   for (const key of allowedFields) {
-    if (submitted[key]) clean[key] = String(submitted[key]).slice(0, 500);
+    const value = submitted[key];
+    if (value === undefined || value === null || value === '') continue;
+    if (!['string', 'number', 'boolean'].includes(typeof value)) {
+      throw new Error(`Category detail "${key}" must be plain text`);
+    }
+    const text = String(value).normalize('NFC').trim();
+    if (text.length > 500) throw new Error(`Category detail "${key}" must be 500 characters or fewer`);
+    if (text) clean[key] = text;
   }
   return clean;
+}
+
+function cleanText(value, field, maxLength, collapseWhitespace = true) {
+  if (typeof value !== 'string') throw new Error(`${field} must be text`);
+  const normalized = value.normalize('NFC').trim();
+  const text = collapseWhitespace ? normalized.replace(/\s+/g, ' ') : normalized;
+  if (text.length > maxLength) throw new Error(`${field} must be ${maxLength} characters or fewer`);
+  return text;
 }
 
 // Fires the (cheap, synchronous) classifier off the request/response cycle so submission
@@ -54,38 +72,107 @@ router.get('/captcha-challenge', (req, res) => {
   res.json(generateChallenge());
 });
 
+// POST /api/reports/captcha-verify - reCAPTCHA-style "I'm not a robot" endpoint.
+// Receives interaction metrics, judges plausibility, and returns a signed
+// human-verification token on success (the submit endpoint then accepts it
+// in place of a text-challenge answer). Falls back to a text challenge when
+// the behavioral check fails, so genuine users are never locked out.
+router.get('/captcha-image', (req, res) => {
+  const imageChallenge = generateImageChallenge();
+  res.json({
+    verified: false,
+    imageMode: true,
+    prompt: imageChallenge.prompt,
+    token: imageChallenge.token,
+    tiles: imageChallenge.tiles
+  });
+});
+
+// POST /api/reports/captcha-verify - reCAPTCHA-style "I'm not a robot" endpoint.
+// Receives interaction metrics, judges plausibility, and returns a signed
+// human-verification token on success (the submit endpoint then accepts it
+// in place of a text-challenge answer). Falls back to an image-selection
+// challenge when the behavioral check fails, so bots never get a free pass.
+router.post('/captcha-verify', (req, res) => {
+  const { timeSpentMs, pointerMoves, keyEvents, honeypot, hasPointer } = req.body || {};
+  if (evaluateBehavior({ timeSpentMs, pointerMoves, keyEvents, honeypot, hasPointer })) {
+    return res.json({ verified: true, token: issueBehaviorToken() });
+  }
+  // Behavioral check failed - escalate to the image-selection challenge
+  // ("select all images with X"), the hardest-to-script option.
+  const imageChallenge = generateImageChallenge();
+  return res.json({
+    verified: false,
+    imageMode: true,
+    prompt: imageChallenge.prompt,
+    token: imageChallenge.token,
+    tiles: imageChallenge.tiles
+  });
+});
+
 // POST /api/reports - submit a new report, Path A (anonymous) or Path B (logged in) side by side (decision #3).
 router.post('/', upload.array('evidence', 10), async (req, res) => {
+  let claimedRecordingId;
   try {
-    const { title, reportedCategory, description, county, subCounty, incidentDateTime, captchaToken, captchaAnswer } = req.body;
+    const { reportedCategory, captchaToken, captchaAnswer } = req.body;
     if (!captchaToken || !verifyChallenge(captchaToken, captchaAnswer)) {
       return res.status(400).json({ error: 'Incorrect or expired verification answer - please try the challenge again' });
     }
+    const title = cleanText(req.body.title, 'Title', 200);
+    const description = cleanText(req.body.description, 'Description', 20000, false);
+    const county = cleanText(req.body.county, 'County', 100);
+    const subCounty = cleanText(req.body.subCounty, 'Sub-county', 100);
     if (!title || !reportedCategory || !description || !county || !subCounty) {
       return res.status(400).json({ error: 'Title, category, description, county and sub-county are required' });
     }
     if (!CATEGORIES.includes(reportedCategory)) {
       return res.status(400).json({ error: 'Invalid category' });
     }
-    if (description.trim().length < 20) {
+    if (description.length < 20) {
       return res.status(400).json({ error: 'Please provide a more detailed description (at least 20 characters)' });
     }
 
     let categorySpecificDetails = {};
     if (req.body.categorySpecificDetails) {
-      try {
-        const parsed = typeof req.body.categorySpecificDetails === 'string'
-          ? JSON.parse(req.body.categorySpecificDetails)
-          : req.body.categorySpecificDetails;
-        categorySpecificDetails = pickCategoryDetails(reportedCategory, parsed);
-      } catch (_) { /* ignore malformed JSON, keep empty */ }
+      const parsed = typeof req.body.categorySpecificDetails === 'string'
+        ? JSON.parse(req.body.categorySpecificDetails)
+        : req.body.categorySpecificDetails;
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return res.status(400).json({ error: 'Category details must be a JSON object' });
+      }
+      categorySpecificDetails = pickCategoryDetails(reportedCategory, parsed);
     }
 
     const demographic = {
-      ageGroup: req.body.ageGroup || undefined,
-      gender: req.body.gender || undefined,
-      occupation: req.body.occupation || undefined
+      ageGroup: req.body.ageGroup ? cleanText(req.body.ageGroup, 'Age group', 100) : undefined,
+      gender: req.body.gender ? cleanText(req.body.gender, 'Gender', 100) : undefined,
+      occupation: req.body.occupation ? cleanText(req.body.occupation, 'Occupation', 120) : undefined
     };
+    const cleanIncidentDateTime = req.body.incidentDateTime
+      ? cleanText(req.body.incidentDateTime, 'Incident date and time', 100)
+      : undefined;
+    const parsedIncidentDateTime = cleanIncidentDateTime ? new Date(cleanIncidentDateTime) : undefined;
+    if (parsedIncidentDateTime && Number.isNaN(parsedIncidentDateTime.getTime())) {
+      return res.status(400).json({ error: 'Incident date and time must be a valid date' });
+    }
+
+    let recordingSession = null;
+    if (req.body.recordingToken) {
+      if (typeof req.body.recordingToken !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(req.body.recordingToken)) {
+        return res.status(400).json({ error: 'The live recording is invalid. Please record it again.' });
+      }
+      if ((req.files || []).length >= 10) {
+        return res.status(400).json({ error: 'A report can include at most 10 evidence items, including the recording.' });
+      }
+      recordingSession = await mongoose.connection.db.collection('recordingSessions').findOne({
+        _id: hashRecordingToken(req.body.recordingToken),
+        status: 'ready',
+        expiresAt: { $gt: new Date() }
+      });
+      if (!recordingSession) {
+        return res.status(400).json({ error: 'The live recording is no longer available. Please record it again.' });
+      }
+    }
 
     // Evidence files are streamed through sharp (images) and written to GridFS (decision #17/#18).
     const evidence = [];
@@ -95,6 +182,13 @@ router.post('/', upload.array('evidence', 10), async (req, res) => {
         evidence.push(await storeEvidenceFile(bucket, file));
       }
     }
+    if (recordingSession) {
+      evidence.push({
+        gridFsId: recordingSession.fileId,
+        filename: recordingSession.filename,
+        type: recordingSession.mediaType
+      });
+    }
 
     let trackingReference = generateTrackingReference();
     // Extremely unlikely collision, but guard against it anyway rather than trust probability alone.
@@ -103,12 +197,12 @@ router.post('/', upload.array('evidence', 10), async (req, res) => {
     }
 
     const isPathB = !!req.user;
-    let accessKey = null;
-    let accessKeyHash = null;
-    if (!isPathB) {
-      accessKey = generateAccessKey();
-      accessKeyHash = await hashSecret(accessKey);
-    }
+    // Every report gets an Access Key now - anonymous (Path A) and logged-in (Path B)
+    // alike. This keeps the "report now, sign in later" story safe: a citizen who
+    // created an account after submitting can still reach their case via Reference+Key
+    // if they lose the session, without the key ever exposing WHO they are.
+    let accessKey = generateAccessKey();
+    const accessKeyHash = await hashSecret(accessKey);
 
     const report = new Report({
       trackingReference,
@@ -117,29 +211,56 @@ router.post('/', upload.array('evidence', 10), async (req, res) => {
       title: title.trim(),
       reportedCategory,
       categorySpecificDetails,
-      description: description.trim(),
+      description,
       county,
       subCounty,
-      incidentDateTime: incidentDateTime || undefined,
+      incidentDateTime: parsedIncidentDateTime,
       demographic,
       evidence,
       statusHistory: [{ status: 'Received', changedAt: new Date(), changedBy: null }]
     });
+    if (recordingSession) {
+      const claimed = await mongoose.connection.db.collection('recordingSessions').findOneAndUpdate(
+        {
+          _id: recordingSession._id,
+          status: 'ready',
+          expiresAt: { $gt: new Date() }
+        },
+        { $set: { status: 'attaching', reportId: report._id } },
+        { returnDocument: 'after' }
+      );
+      if (!claimed) {
+        return res.status(409).json({ error: 'The recording is already being attached to another report.' });
+      }
+      claimedRecordingId = recordingSession._id;
+    }
     await report.save();
+    if (claimedRecordingId) {
+      try {
+        await mongoose.connection.db.collection('recordingSessions').deleteOne({ _id: claimedRecordingId });
+        claimedRecordingId = null;
+      } catch (cleanupError) {
+        console.error('Could not clean up an attached recording session:', cleanupError.message);
+      }
+    }
 
     classifyInBackground(report._id, { title, description, evidenceCount: evidence.length });
 
     const response = {
       message: 'Report submitted successfully',
       trackingReference,
-      reportId: report._id
+      reportId: report._id,
+      accessKey,
+      accessKeyWarning: 'Save this Access Key now - it is shown only once and cannot be recovered later.'
     };
-    if (accessKey) {
-      response.accessKey = accessKey;
-      response.accessKeyWarning = 'Save this Access Key now - it is shown only once and cannot be recovered later.';
-    }
     return res.status(201).json(response);
   } catch (err) {
+    if (claimedRecordingId) {
+      await mongoose.connection.db.collection('recordingSessions').updateOne(
+        { _id: claimedRecordingId, status: 'attaching' },
+        { $set: { status: 'ready' }, $unset: { reportId: '' } }
+      ).catch((cleanupError) => console.error('Could not release a recording session:', cleanupError.message));
+    }
     return res.status(400).json({ error: err.message });
   }
 });
@@ -147,7 +268,7 @@ router.post('/', upload.array('evidence', 10), async (req, res) => {
 // GET /api/reports - public case list, general tier only (decision #3/#21): never exposes identity.
 router.get('/', async (req, res) => {
   try {
-    const reports = await Report.find().sort({ createdAt: -1 }).limit(200);
+    const reports = await Report.find({ archivedAt: null }).sort({ createdAt: -1 }).limit(200);
     return res.json(reports.map((r) => r.toGeneralTier()));
   } catch (err) {
     return res.status(500).json({ error: err.message });
@@ -157,7 +278,7 @@ router.get('/', async (req, res) => {
 // GET /api/reports/mine - Path B's own submissions, deep tier (decision #3).
 router.get('/mine', requireAuth, async (req, res) => {
   try {
-    const reports = await Report.find({ user: req.user._id }).sort({ createdAt: -1 });
+    const reports = await Report.find({ user: req.user._id, archivedAt: null }).sort({ createdAt: -1 });
     return res.json(reports.map((r) => r.toDeepTier()));
   } catch (err) {
     return res.status(500).json({ error: err.message });
@@ -168,10 +289,14 @@ function withSuggestedAgency(report) {
   return { ...report.toReviewerTier(), suggestedAgency: suggestAgencyForCategory(report.reportedCategory) };
 }
 
+function findActiveReport(id) {
+  return Report.findOne({ _id: id, archivedAt: null });
+}
+
 // GET /api/reports/queue - Reviewer/Admin shared triage queue, reviewer tier (decision #24/#25).
 router.get('/queue', requireRole('reviewer', 'admin'), async (req, res) => {
   try {
-    const reports = await Report.find().sort({ createdAt: -1 }).limit(200);
+    const reports = await Report.find({ archivedAt: null }).sort({ createdAt: -1 }).limit(200);
     return res.json(reports.map(withSuggestedAgency));
   } catch (err) {
     return res.status(500).json({ error: err.message });
@@ -185,6 +310,7 @@ router.get('/escalations', requireRole('admin'), async (req, res) => {
   try {
     const cutoff = new Date(Date.now() - ESCALATION_THRESHOLD_MINUTES * 60 * 1000);
     const reports = await Report.find({
+      archivedAt: null,
       claimedBy: null,
       status: { $in: ['Received', 'In Review'] },
       'classification.urgency': { $in: ['High', 'Critical'] },
@@ -208,7 +334,7 @@ router.get('/track', async (req, res) => {
     const { ref, key } = req.query;
     if (!ref || !key) return res.status(400).json({ error: 'Tracking reference and access key are required' });
 
-    const report = await Report.findOne({ trackingReference: ref });
+    const report = await Report.findOne({ trackingReference: ref, archivedAt: null });
     if (!report) return res.status(404).json({ error: 'No report found for that tracking reference' });
 
     const valid = await verifySecret(key, report.accessKeyHash);
@@ -223,7 +349,7 @@ router.get('/track', async (req, res) => {
 // GET /api/reports/:id - single report, deep tier if the Path B owner or a Reviewer/Admin, else general tier.
 router.get('/:id', async (req, res) => {
   try {
-    const report = await Report.findById(req.params.id);
+    const report = await findActiveReport(req.params.id);
     if (!report) return res.status(404).json({ error: 'Report not found' });
 
     const isOwner = req.user && report.user && report.user.toString() === req.user._id.toString();
@@ -239,7 +365,7 @@ router.get('/:id', async (req, res) => {
 // POST /api/reports/:id/claim - a Reviewer claims a case to avoid duplicate work (decision #24).
 router.post('/:id/claim', requireRole('reviewer', 'admin'), async (req, res) => {
   try {
-    const report = await Report.findById(req.params.id);
+    const report = await findActiveReport(req.params.id);
     if (!report) return res.status(404).json({ error: 'Report not found' });
     if (report.claimedBy && report.claimedBy.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
       return res.status(409).json({ error: 'This case is already claimed by another reviewer' });
@@ -258,7 +384,7 @@ router.post('/:id/refer', requireRole('reviewer', 'admin'), async (req, res) => 
     const { agency, referenceNumber, notes } = req.body;
     if (!agency) return res.status(400).json({ error: 'An agency is required' });
 
-    const report = await Report.findById(req.params.id);
+    const report = await findActiveReport(req.params.id);
     if (!report) return res.status(404).json({ error: 'Report not found' });
 
     report.agencyReferral = { agency, referenceNumber: referenceNumber || null, notes: notes || null };
@@ -279,7 +405,7 @@ router.patch('/:id/status', requireRole('reviewer', 'admin'), async (req, res) =
       return res.status(400).json({ error: 'Resolving a case requires both a resolution note and a reference' });
     }
 
-    const report = await Report.findById(req.params.id);
+    const report = await findActiveReport(req.params.id);
     if (!report) return res.status(404).json({ error: 'Report not found' });
 
     report.status = status;
@@ -315,7 +441,7 @@ router.patch('/:id/status', requireRole('reviewer', 'admin'), async (req, res) =
 router.patch('/:id/legal-hold', requireRole('admin'), async (req, res) => {
   try {
     const { legalHold } = req.body;
-    const report = await Report.findById(req.params.id);
+    const report = await findActiveReport(req.params.id);
     if (!report) return res.status(404).json({ error: 'Report not found' });
     report.legalHold = !!legalHold;
     await report.save();
@@ -325,14 +451,33 @@ router.patch('/:id/legal-hold', requireRole('admin'), async (req, res) => {
   }
 });
 
+// DELETE /api/reports/:id - Admin-only soft deletion preserves the case audit trail.
+router.delete('/:id', requireRole('admin'), async (req, res) => {
+  try {
+    const report = await findActiveReport(req.params.id);
+    if (!report) return res.status(404).json({ error: 'Report not found' });
+    if (report.legalHold) {
+      return res.status(409).json({ error: 'A report under legal hold cannot be archived' });
+    }
+
+    report.archivedAt = new Date();
+    report.archivedBy = req.user._id;
+    await report.save();
+    return res.status(204).end();
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
+  }
+});
+
 // GET /api/reports/:id/related-suggestions - soft suggestions only, never auto-merged (decision #16).
 router.get('/:id/related-suggestions', requireRole('reviewer', 'admin'), async (req, res) => {
   try {
-    const report = await Report.findById(req.params.id);
+    const report = await findActiveReport(req.params.id);
     if (!report) return res.status(404).json({ error: 'Report not found' });
 
     const alreadyLinked = report.relatedCaseLinks.map((id) => id.toString());
     const candidates = await Report.find({
+      archivedAt: null,
       _id: { $ne: report._id, $nin: alreadyLinked },
       reportedCategory: report.reportedCategory,
       county: report.county
@@ -359,8 +504,8 @@ router.post('/:id/link', requireRole('reviewer', 'admin'), async (req, res) => {
     if (relatedId === req.params.id) return res.status(400).json({ error: 'A case cannot be linked to itself' });
 
     const [report, related] = await Promise.all([
-      Report.findById(req.params.id),
-      Report.findById(relatedId)
+      findActiveReport(req.params.id),
+      findActiveReport(relatedId)
     ]);
     if (!report || !related) return res.status(404).json({ error: 'Report not found' });
 

@@ -9,7 +9,7 @@ const router = express.Router();
 // Accepts exactly one of: Reviewer/Admin session, Path B owner session, or ?ref=&key= for that report.
 router.get('/:reportId/:fileId', async (req, res) => {
   try {
-    const report = await Report.findById(req.params.reportId);
+    const report = await Report.findOne({ _id: req.params.reportId, archivedAt: null });
     if (!report) return res.status(404).json({ error: 'Report not found' });
 
     const isStaff = req.user && ['reviewer', 'admin'].includes(req.user.role);
@@ -26,6 +26,11 @@ router.get('/:reportId/:fileId', async (req, res) => {
 
     const bucket = getBucket();
     res.set('Content-Disposition', `inline; filename="${evidenceItem.filename}"`);
+    const storedFile = await bucket.find({ _id: evidenceItem.gridFsId }).next();
+    if (!storedFile) return res.status(404).json({ error: 'File not found in storage' });
+    if (storedFile.metadata && storedFile.metadata.contentType) {
+      res.type(storedFile.metadata.contentType);
+    }
     bucket.openDownloadStream(evidenceItem.gridFsId)
       .on('error', () => res.status(404).json({ error: 'File not found in storage' }))
       .pipe(res);

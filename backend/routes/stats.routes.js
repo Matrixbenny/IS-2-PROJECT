@@ -8,7 +8,7 @@ const router = express.Router();
 // internal ML classification.category, which stays a Reviewer-only triage signal.
 router.get('/public', async (req, res) => {
   try {
-    const reports = await Report.find().select('reportedCategory county status').lean();
+    const reports = await Report.find({ archivedAt: null }).select('reportedCategory county status').lean();
 
     const total = reports.length;
     const resolved = reports.filter((r) => r.status === 'Resolved').length;

@@ -16,3 +16,5 @@ dist/
 .env
 backend/data/
 backend/cookies.txt
+backend/*.log
+frontend/*.log

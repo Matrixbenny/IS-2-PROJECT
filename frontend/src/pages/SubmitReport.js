@@ -3,6 +3,16 @@ import api from '../api';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import KENYA_COUNTIES from '../data/kenyaCounties';
+import LiveRecorder from '../components/LiveRecorder';
+import RobotCheck from '../components/RobotCheck';
+
+const AGE_GROUPS = ['Under 18', '18–24', '25–34', '35–44', '45–54', '55–64', '65+'];
+const GENDERS = ['Female', 'Male', 'Other', 'Prefer not to say'];
+const OCCUPATIONS = [
+  'Student', 'Business / Trader', 'Farmer', 'Civil Servant', 'Teacher / Lecturer',
+  'Healthcare Worker', 'Driver / Transport (Matatu, Taxi, Boda Boda)', 'Office / Corporate Employee',
+  'Unemployed', 'Retired', 'Other / Prefer not to say'
+];
 
 const emptyForm = {
   title: '',
@@ -27,16 +37,16 @@ function SubmitReport() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState(null);
-  const [captcha, setCaptcha] = useState(null);
+  const [captchaToken, setCaptchaToken] = useState('');
   const [captchaAnswer, setCaptchaAnswer] = useState('');
+  const [recordingToken, setRecordingToken] = useState('');
+  const [recordingBusy, setRecordingBusy] = useState(false);
+  const [recordingName, setRecordingName] = useState('');
 
-  const loadCaptcha = () => {
-    api.get('/reports/captcha-challenge').then((res) => setCaptcha(res.data)).catch(() => {});
+  const handleCaptchaToken = (token, answer) => {
+    setCaptchaToken(token || '');
+    setCaptchaAnswer(answer || '');
   };
-
-  useEffect(() => {
-    loadCaptcha();
-  }, []);
 
   useEffect(() => {
     api.get('/reports/categories')
@@ -77,8 +87,9 @@ function SubmitReport() {
       if (form.gender) payload.append('gender', form.gender);
       if (form.occupation) payload.append('occupation', form.occupation);
       payload.append('categorySpecificDetails', JSON.stringify(categoryDetails));
-      payload.append('captchaToken', captcha?.token || '');
+      payload.append('captchaToken', captchaToken);
       payload.append('captchaAnswer', captchaAnswer);
+      if (recordingToken) payload.append('recordingToken', recordingToken);
       files.forEach((f) => payload.append('evidence', f));
 
       const res = await api.post('/reports', payload, {
@@ -88,10 +99,12 @@ function SubmitReport() {
       setForm(emptyForm);
       setCategoryDetails({});
       setFiles([]);
+      setRecordingToken('');
+      setRecordingName('');
       setCaptchaAnswer('');
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to submit report');
-      loadCaptcha();
+      setCaptchaToken('');
       setCaptchaAnswer('');
     }
     setLoading(false);
@@ -109,16 +122,12 @@ function SubmitReport() {
           <p>Save these details now - they are the only way to check your case status later.</p>
           <div className="kw-helper" style={{ color: '#cbd5e1' }}>Tracking Reference</div>
           <div className="kw-confirm-value">{result.trackingReference}</div>
-          {result.accessKey && (
-            <>
-              <div className="kw-helper" style={{ color: '#cbd5e1' }}>Access Key</div>
-              <div className="kw-confirm-value">{result.accessKey}</div>
-              <div className="kw-confirm-warning">{result.accessKeyWarning}</div>
-            </>
-          )}
-          {!result.accessKey && (
+          <div className="kw-helper" style={{ color: '#cbd5e1' }}>Access Key</div>
+          <div className="kw-confirm-value">{result.accessKey}</div>
+          <div className="kw-confirm-warning">{result.accessKeyWarning}</div>
+          {user && (
             <div className="kw-helper" style={{ color: '#cbd5e1' }}>
-              You're signed in, so this report is already saved to your "My Reports" page - no access key needed.
+              This report is also saved to your "My Reports" page while you're signed in - but keep this Access Key in case you lose the session.
             </div>
           )}
         </div>
@@ -194,6 +203,17 @@ function SubmitReport() {
         </div>
 
         <div className="kw-form-section">
+          <LiveRecorder
+            onRecordingReady={(token, filename) => {
+              setRecordingToken(token || '');
+              setRecordingName(filename || '');
+            }}
+            onBusyChange={setRecordingBusy}
+          />
+          {recordingName && <p className="kw-helper">Attached live recording: {recordingName}</p>}
+        </div>
+
+        <div className="kw-form-section">
           <label htmlFor="evidence">{t('label_evidence')}</label>
           <input
             id="evidence"
@@ -208,19 +228,34 @@ function SubmitReport() {
         <div className="kw-form-section">
           <label>{t('label_demographic')}</label>
           <div className="kw-demographic-row">
-            <input name="ageGroup" value={form.ageGroup} onChange={handleChange} placeholder="Age Group" />
-            <input name="gender" value={form.gender} onChange={handleChange} placeholder="Gender" />
-            <input name="occupation" value={form.occupation} onChange={handleChange} placeholder="Occupation" />
+            <select name="ageGroup" aria-label="Age group" value={form.ageGroup} onChange={handleChange}>
+              <option value="">Age group (optional)...</option>
+              {AGE_GROUPS.map((a) => <option key={a} value={a}>{a}</option>)}
+            </select>
+            <select name="gender" aria-label="Gender" value={form.gender} onChange={handleChange}>
+              <option value="">Gender (optional)...</option>
+              {GENDERS.map((g) => <option key={g} value={g}>{g}</option>)}
+            </select>
+            <select name="occupation" aria-label="Occupation" value={form.occupation} onChange={handleChange}>
+              <option value="">Occupation (optional)...</option>
+              {OCCUPATIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+            </select>
           </div>
+          <div className="kw-helper">Shared voluntarily to help reviewers understand reporting patterns - never required, and never linked back to your identity.</div>
         </div>
 
         <div className="kw-form-section">
-          <label htmlFor="captchaAnswer">Quick human check{captcha ? `: ${captcha.question}` : '...'}<span className="kw-required">*</span></label>
-          <input id="captchaAnswer" value={captchaAnswer} onChange={(e) => setCaptchaAnswer(e.target.value)} required />
+          <label>Security check<span className="kw-required">*</span></label>
+          <RobotCheck onToken={handleCaptchaToken} />
         </div>
 
-        <button type="submit" disabled={loading}>{loading ? t('btn_submitting') : t('btn_submitReport')}</button>
-        {error && <div className="error">{error}</div>}
+        <button type="submit" disabled={loading || recordingBusy || !captchaToken} title={!captchaToken ? 'Complete the security check first' : undefined}>
+          {loading ? t('btn_submitting') : recordingBusy ? 'Finish or cancel the recording to continue' : t('btn_submitReport')}
+        </button>
+        {!captchaToken && !loading && !recordingBusy && (
+          <div className="kw-helper" role="status">The Submit button unlocks once you pass the security check above.</div>
+        )}
+        {error && <div className="error" role="alert">{error}</div>}
       </form>
     </div>
   );

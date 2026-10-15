@@ -80,6 +80,8 @@ const reportSchema = new mongoose.Schema({
   // Set by an Admin when a case is under active legal proceedings - exempts it from
   // the automatic identity-anonymization retention window (decision #11).
   legalHold: { type: Boolean, default: false },
+  archivedAt: { type: Date, default: null },
+  archivedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
 
   createdAt: { type: Date, default: Date.now }
 });

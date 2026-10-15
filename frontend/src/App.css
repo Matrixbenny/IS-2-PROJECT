@@ -20,6 +20,18 @@
   --kw-shadow-hover: 0 10px 28px rgba(15, 23, 42, 0.12);
 }
 
+@media (max-width: 540px) {
+  .kw-install-prompt {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .kw-recorder-options {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
 * { box-sizing: border-box; }
 
 /* Submit Report Page Enhancements */
@@ -195,6 +207,54 @@
   color: #fff;
 }
 .kw-nav-link.kw-nav-cta:hover { background: var(--kw-navy-light); }
+
+.kw-install-prompt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  margin: -16px 0 24px;
+  background: var(--kw-card);
+  border: 1px solid var(--kw-border);
+  border-radius: 12px;
+}
+
+.kw-live-recorder {
+  width: 100%;
+  padding: 16px;
+  border: 1px solid var(--kw-border);
+  border-radius: 10px;
+}
+
+.kw-live-recorder legend {
+  padding: 0 6px;
+  color: var(--kw-navy);
+  font-weight: 700;
+}
+
+.kw-recorder-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.kw-recorder-options label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.kw-recorder-status,
+.kw-recorder-error {
+  margin: 12px 0 0;
+  font-weight: 600;
+}
+
+.kw-recorder-error {
+  color: var(--kw-red);
+}
 
 /* Professional Header Styles */
 .kw-header {
@@ -599,3 +659,84 @@ h2 {
 
 
 
+/* ===== reCAPTCHA-style self-hosted widget (Kenya Watch Verify) ===== */
+.kw-robotcheck { max-width: 320px; margin-top: 4px; }
+.kw-robotcheck-card {
+  background: #f9f9f9;
+  border: 1px solid #d3d3d3;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  overflow: hidden;
+  width: 100%;
+}
+.kw-robotcheck-body { display: flex; align-items: center; gap: 12px; padding: 14px 16px; }
+.kw-robotcheck-challenge .kw-robotcheck-body { align-items: flex-start; }
+.kw-robotcheck-checkbox {
+  width: 26px; height: 26px; min-width: 26px;
+  background: #fff;
+  border: 2px solid #c1c1c1;
+  border-radius: 3px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+.kw-robotcheck-checkbox:hover { border-color: #0d9488; }
+.kw-robotcheck-check { color: #0d9488; font-size: 18px; font-weight: 800; line-height: 1; }
+.kw-robotcheck-label { font-size: 0.95rem; color: #282828; cursor: pointer; user-select: none; flex: 1; }
+.kw-robotcheck-logo { font-size: 26px; opacity: 0.9; }
+.kw-robotcheck-footer {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 4px 12px 6px;
+  background: #f0f0f0;
+  border-top: 1px solid #d3d3d3;
+}
+.kw-robotcheck-brand { font-size: 0.7rem; color: #9a9a9a; }
+.kw-robotcheck-refresh {
+  background: none; border: none; color: #555; cursor: pointer;
+  font-size: 0.85rem; padding: 2px 6px; border-radius: 3px;
+}
+.kw-robotcheck-refresh:hover:not(:disabled) { background: #e0e0e0; color: #0f172a; }
+.kw-robotcheck-refresh:disabled { opacity: 0.5; cursor: default; }
+.kw-robotcheck-spinner {
+  display: inline-block; width: 20px; height: 20px;
+  border: 3px solid #0d9488; border-top-color: transparent;
+  border-radius: 50%;
+  animation: kw-spin 0.8s linear infinite;
+}
+@keyframes kw-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .kw-robotcheck-spinner { animation-duration: 3s; }
+}
+
+/* ===== Image-selection challenge (select all images with X) ===== */
+.kw-robotcheck-image { max-width: 340px; }
+.kw-robotcheck-image-head { display: flex; align-items: center; gap: 10px; padding: 12px 14px; }
+.kw-robotcheck-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  padding: 0 14px 12px;
+}
+.kw-robotcheck-tile {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 4px;
+  overflow: hidden;
+  cursor: pointer;
+  background: #fff;
+  transition: transform 0.1s ease;
+}
+.kw-robotcheck-tile:hover { transform: scale(1.03); }
+.kw-robotcheck-tile.selected { border-color: #0d9488; }
+.kw-robotcheck-tile.selected::after {
+  content: '?';
+  position: absolute;
+  top: 4px; right: 6px;
+  color: #0d9488;
+  font-weight: 800;
+  font-size: 15px;
+  text-shadow: 0 0 3px #fff, 0 0 3px #fff;
+}
+.kw-robotcheck-tile svg { display: block; width: 100%; height: 100%; }

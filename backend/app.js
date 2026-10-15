@@ -11,6 +11,7 @@ const evidenceRoutes = require('./routes/evidence.routes');
 const userRoutes = require('./routes/users.routes');
 const agencyPortalRoutes = require('./routes/agencyPortal.routes');
 const statsRoutes = require('./routes/stats.routes');
+const recordingRoutes = require('./routes/recording.routes');
 
 // Builds and returns a configured Express app WITHOUT connecting to MongoDB or
 // calling .listen() - kept separate from index.js so tests can import this directly
@@ -44,7 +45,15 @@ function createApp() {
     legacyHeaders: false,
     message: { error: 'Too many attempts. Please wait a few minutes and try again.' }
   });
+  const recordingStartLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000,
+    max: 20,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Too many recording sessions started from this network recently. Please try again later.' }
+  });
   app.use('/api/reports', (req, res, next) => (req.method === 'POST' && req.path === '/' ? submitLimiter(req, res, next) : next()));
+  app.use('/api/recordings', (req, res, next) => (req.method === 'POST' && req.path === '/' ? recordingStartLimiter(req, res, next) : next()));
   app.use(['/api/auth/login', '/api/auth/register', '/api/auth/forgot-password'], authLimiter);
 
   app.get('/', (req, res) => {
@@ -53,6 +62,7 @@ function createApp() {
 
   app.use('/api/auth', authRoutes);
   app.use('/api/reports', reportRoutes);
+  app.use('/api/recordings', recordingRoutes);
   app.use('/api/evidence', evidenceRoutes);
   app.use('/api/users', userRoutes);
   app.use('/api/agency-portal', agencyPortalRoutes);
