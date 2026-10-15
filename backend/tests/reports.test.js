@@ -48,6 +48,68 @@ test('GET /api/reports/categories returns the fixed category list and fields', a
   assert.ok(res.body.fields.Bribery.some((f) => f.name === 'officialRole'));
 });
 
+test('GET /api/reports/admin-overview returns exact database counts and is Admin-only', async () => {
+  const unauthorized = await request(app).get('/api/reports/admin-overview');
+  assert.strictEqual(unauthorized.status, 401);
+
+  const user = await User.create({
+    name: 'Overview User',
+    email: 'overview-user@example.com',
+    password: 'StrongPassw0rd!'
+  });
+  const userLogin = await request(app).post('/api/auth/login').send({
+    email: user.email,
+    password: 'StrongPassw0rd!'
+  });
+  const userCookie = userLogin.headers['set-cookie'].find((value) => value.startsWith('kw_token=')).split(';')[0];
+  const forbidden = await request(app)
+    .get('/api/reports/admin-overview')
+    .set('Cookie', userCookie);
+  assert.strictEqual(forbidden.status, 403);
+
+  const admin = await User.create({
+    name: 'Overview Admin',
+    email: 'overview-admin@example.com',
+    password: 'StrongPassw0rd!',
+    role: 'admin'
+  });
+  const adminLogin = await request(app).post('/api/auth/login').send({
+    email: admin.email,
+    password: 'StrongPassw0rd!'
+  });
+  const adminCookie = adminLogin.headers['set-cookie'].find((value) => value.startsWith('kw_token=')).split(';')[0];
+  const response = await request(app)
+    .get('/api/reports/admin-overview')
+    .set('Cookie', adminCookie);
+  assert.strictEqual(response.status, 200);
+
+  const active = await Report.countDocuments({ archivedAt: null });
+  const archived = await Report.countDocuments({ archivedAt: { $ne: null } });
+  const statuses = await Report.aggregate([
+    { $match: { archivedAt: null } },
+    { $group: { _id: '$status', count: { $sum: 1 } } }
+  ]);
+  const roles = await User.aggregate([{ $group: { _id: '$role', count: { $sum: 1 } } }]);
+  const statusCounts = Object.fromEntries(statuses.map(({ _id, count }) => [_id, count]));
+  const roleCounts = Object.fromEntries(roles.map(({ _id, count }) => [_id, count]));
+
+  assert.strictEqual(response.body.reports.active, active);
+  assert.strictEqual(response.body.reports.archived, archived);
+  assert.strictEqual(response.body.reports.total, active + archived);
+  assert.deepStrictEqual(response.body.reports.byStatus, {
+    Received: statusCounts.Received || 0,
+    'In Review': statusCounts['In Review'] || 0,
+    Resolved: statusCounts.Resolved || 0,
+    Rejected: statusCounts.Rejected || 0
+  });
+  assert.deepStrictEqual(response.body.accounts, {
+    total: Object.values(roleCounts).reduce((total, count) => total + count, 0),
+    admins: roleCounts.admin || 0,
+    reviewers: roleCounts.reviewer || 0,
+    users: roleCounts.user || 0
+  });
+});
+
 test('POST /api/reports rejects a submission missing required fields', async () => {
   const res = await request(app).post('/api/reports').send({ title: 'Incomplete report' });
   assert.strictEqual(res.status, 400);

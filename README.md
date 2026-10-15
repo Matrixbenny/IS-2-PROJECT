@@ -14,7 +14,7 @@ See [Docs/my IS story.md](Docs/my%20IS%20story.md) for the full set of 30 resear
 - Tracking Reference + Access Key capability-based case tracking for anonymous reporters, with a general/deep visibility split
 - Lightweight keyword-based ML classification (category + urgency), running asynchronously so it never blocks submission
 - Reviewer Queue: claim cases, update status (resolution requires a note + reference), refer to an Agency/Institution, link related cases; Admins can archive reports without destroying the audit record or evidence
-- Admin: provision Reviewer/Admin accounts, escalation alerts for unclaimed high-urgency cases, data-retention/anonymization tooling
+- Admin overview with live report, workflow, account, and escalation counts; account management, archived-report controls, and data-retention/anonymization tooling
 - Public statistics page (aggregate-only) and a demo "Agency Partner Portal" concept prototype
 - English/Kiswahili language toggle
 - Security: helmet security headers, rate limiting, a self-hosted CAPTCHA for anonymous submissions, bcrypt password hashing, httpOnly JWT cookie auth

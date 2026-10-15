@@ -351,6 +351,59 @@ router.get('/escalations', requireRole('admin'), async (req, res) => {
   }
 });
 
+router.get('/admin-overview', requireRole('admin'), async (req, res) => {
+  try {
+    const cutoff = new Date(Date.now() - ESCALATION_THRESHOLD_MINUTES * 60 * 1000);
+    const escalationFilter = {
+      archivedAt: null,
+      claimedBy: null,
+      status: { $in: ['Received', 'In Review'] },
+      'classification.urgency': { $in: ['High', 'Critical'] },
+      'classification.classifiedAt': { $lte: cutoff }
+    };
+    const [activeReports, archivedReports, statuses, roles, escalations] = await Promise.all([
+      Report.countDocuments({ archivedAt: null }),
+      Report.countDocuments({ archivedAt: { $ne: null } }),
+      Report.aggregate([
+        { $match: { archivedAt: null } },
+        { $group: { _id: '$status', count: { $sum: 1 } } }
+      ]),
+      User.aggregate([
+        { $group: { _id: '$role', count: { $sum: 1 } } }
+      ]),
+      Report.countDocuments(escalationFilter)
+    ]);
+
+    const statusCounts = Object.fromEntries(statuses.map(({ _id, count }) => [_id, count]));
+    const roleCounts = Object.fromEntries(roles.map(({ _id, count }) => [_id, count]));
+    return res.json({
+      reports: {
+        active: activeReports,
+        archived: archivedReports,
+        total: activeReports + archivedReports,
+        byStatus: {
+          Received: statusCounts.Received || 0,
+          'In Review': statusCounts['In Review'] || 0,
+          Resolved: statusCounts.Resolved || 0,
+          Rejected: statusCounts.Rejected || 0
+        }
+      },
+      accounts: {
+        total: Object.values(roleCounts).reduce((total, count) => total + count, 0),
+        admins: roleCounts.admin || 0,
+        reviewers: roleCounts.reviewer || 0,
+        users: roleCounts.user || 0
+      },
+      escalations: {
+        count: escalations,
+        thresholdMinutes: ESCALATION_THRESHOLD_MINUTES
+      }
+    });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/reports/track - anonymous deep-tier lookup via Tracking Reference + Access Key (decision #21).
 router.get('/track', async (req, res) => {
   try {
