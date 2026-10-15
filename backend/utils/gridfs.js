@@ -11,4 +11,12 @@ function getBucket() {
   return bucket;
 }
 
-module.exports = { getBucket };
+async function deleteGridFsFile(fileId) {
+  const db = mongoose.connection.db;
+  await Promise.all([
+    db.collection('evidence.files').deleteOne({ _id: fileId }),
+    db.collection('evidence.chunks').deleteMany({ files_id: fileId })
+  ]);
+}
+
+module.exports = { getBucket, deleteGridFsFile };

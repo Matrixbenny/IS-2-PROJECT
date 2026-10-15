@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import api from '../api';
 import { useAuth } from '../context/AuthContext';
+import EvidenceDownloads from '../components/EvidenceDownloads';
+import usePolling from '../hooks/usePolling';
 
 function statusClass(status) {
   return `status-${status.toLowerCase().replace(/\s+/g, '-')}`;
@@ -119,6 +121,7 @@ function CaseDetail({ report, agencies, onChanged, isAdmin }) {
       <div className="kw-pro-meta"><b>Reporter:</b> {report.hasAccount ? 'Registered reporter' : 'Anonymous'}</div>
       <div className="kw-pro-meta"><b>Claimed by:</b> {report.claimedBy ? 'Claimed' : <span className="kw-faded">Unclaimed</span>}</div>
       <div className="kw-pro-meta"><b>Evidence:</b> {report.evidence.length > 0 ? `${report.evidence.length} file(s)` : 'None'}</div>
+      <EvidenceDownloads reportId={report._id} evidence={report.evidence} />
       {isAdmin && (
         <div className="kw-pro-meta">
           <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
@@ -216,6 +219,7 @@ function ReviewerQueue() {
     if (user && ['reviewer', 'admin'].includes(user.role)) load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
+  usePolling(load);
 
   if (!user || !['reviewer', 'admin'].includes(user.role)) {
     return <div className="kw-helper">This page is only available to Reviewers and Admins.</div>;

@@ -14,6 +14,7 @@ import Stats from './pages/Stats';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import Escalations from './pages/Escalations';
+import ArchivedReports from './pages/ArchivedReports';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
 
@@ -112,6 +113,9 @@ function AppShell() {
             <NavLink to="/manage-users" className="kw-nav-link">{t('nav_manageUsers')}</NavLink>
           )}
           {user && user.role === 'admin' && (
+            <NavLink to="/archived-reports" className="kw-nav-link">Archived Reports</NavLink>
+          )}
+          {user && user.role === 'admin' && (
             <NavLink to="/escalations" className="kw-nav-link">{t('nav_escalations')}</NavLink>
           )}
           <NavLink to="/about" className="kw-nav-link">{t('nav_about')}</NavLink>
@@ -126,6 +130,7 @@ function AppShell() {
             <Route path="/my-reports" element={<MyReports />} />
             <Route path="/reviewer-queue" element={<ReviewerQueue />} />
             <Route path="/manage-users" element={<ManageUsers />} />
+            <Route path="/archived-reports" element={<ArchivedReports />} />
             <Route path="/escalations" element={<Escalations />} />
             <Route path="/about" element={<About />} />
             <Route path="/login" element={<Login />} />

@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import api from '../api';
+import EvidenceDownloads from '../components/EvidenceDownloads';
+import usePolling from '../hooks/usePolling';
 
 function statusClass(status) {
   return `status-${status.toLowerCase().replace(/\s+/g, '-')}`;
@@ -11,6 +13,24 @@ function TrackReport() {
   const [report, setReport] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const refreshReport = useCallback(async () => {
+    if (!report) return;
+    try {
+      const res = await api.get('/reports/track', { params: { ref: ref.trim(), key: key.trim() } });
+      setReport(res.data);
+      setError('');
+    } catch (loadError) {
+      if (loadError.response?.status === 404) {
+        setReport(null);
+        setError('This report is no longer available.');
+      } else {
+        setError(loadError.response?.data?.error || 'Could not refresh this report.');
+      }
+    }
+  }, [report, ref, key]);
+
+  usePolling(refreshReport);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -55,6 +75,12 @@ function TrackReport() {
           <div className="kw-pro-meta"><b>Category:</b> {report.reportedCategory}</div>
           <div className="kw-pro-meta"><b>Location:</b> {report.subCounty}, {report.county}</div>
           <div className="kw-pro-meta"><b>Description:</b> {report.description}</div>
+          <EvidenceDownloads
+            reportId={report._id}
+            evidence={report.evidence}
+            trackingReference={report.trackingReference}
+            trackingKey={key.trim()}
+          />
           <div className="kw-pro-meta"><b>Submitted:</b> {new Date(report.createdAt).toLocaleString()}</div>
           {report.resolutionNote && (
             <div className="kw-pro-meta"><b>Resolution:</b> {report.resolutionNote} (Ref: {report.resolutionReference})</div>

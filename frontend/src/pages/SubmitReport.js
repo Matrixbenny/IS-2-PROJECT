@@ -222,7 +222,9 @@ function SubmitReport() {
             accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime,audio/mpeg,audio/wav,audio/mp4,application/pdf,.docx"
             onChange={(e) => setFiles(Array.from(e.target.files))}
           />
-          <div className="kw-helper">Images, video, audio or documents. Any embedded location/device metadata in photos is stripped automatically before storage.</div>
+          <div className="kw-helper">
+            Files are stored and retrieved byte-for-byte as uploaded. Photos or documents may contain GPS, device, or author metadata; remove it yourself first if it could identify you.
+          </div>
         </div>
 
         <div className="kw-form-section">

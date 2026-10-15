@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import api from '../api';
 import { useAuth } from '../context/AuthContext';
+import usePolling from '../hooks/usePolling';
 
 function urgencyClass(urgency) {
   return `kw-urgency-badge kw-urgency-${(urgency || 'low').toLowerCase()}`;
@@ -17,6 +18,7 @@ function Escalations() {
     if (user && user.role === 'admin') load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
+  usePolling(load);
 
   if (!user || user.role !== 'admin') {
     return <div className="kw-helper">This page is only available to Admins.</div>;

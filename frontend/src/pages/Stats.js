@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import api from '../api';
+import usePolling from '../hooks/usePolling';
 
 function BreakdownBar({ name, count, max }) {
   const pct = max === 0 ? 0 : Math.round((count / max) * 100);
@@ -18,11 +19,18 @@ function Stats() {
   const [stats, setStats] = useState(null);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    api.get('/stats/public')
-      .then((res) => setStats(res.data))
-      .catch(() => setError('Could not load statistics. Is the backend running?'));
+  const loadStats = useCallback(async () => {
+    try {
+      const res = await api.get('/stats/public');
+      setStats(res.data);
+      setError('');
+    } catch (loadError) {
+      setError(loadError.response?.data?.error || 'Could not load statistics. Is the backend running?');
+    }
   }, []);
+
+  useEffect(() => { loadStats(); }, [loadStats]);
+  usePolling(loadStats);
 
   if (error) return <div className="error">{error}</div>;
   if (!stats) return <div className="kw-empty-state">Loading statistics...</div>;

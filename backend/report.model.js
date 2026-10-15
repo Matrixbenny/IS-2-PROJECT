@@ -86,6 +86,10 @@ const reportSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
+reportSchema.index({ archivedAt: 1, createdAt: -1 });
+reportSchema.index({ user: 1, archivedAt: 1, createdAt: -1 });
+reportSchema.index({ claimedBy: 1, status: 1, 'classification.urgency': 1, 'classification.classifiedAt': 1 });
+
 // General tier (decision #21): safe for public browsing or Tracking Reference alone.
 reportSchema.methods.toGeneralTier = function toGeneralTier() {
   return {
@@ -128,6 +132,7 @@ reportSchema.methods.toReviewerTier = function toReviewerTier() {
     relatedCaseLinks: this.relatedCaseLinks,
     claimedBy: this.claimedBy,
     legalHold: this.legalHold,
+    archivedAt: this.archivedAt,
     hasAccount: !!this.user
   };
 };

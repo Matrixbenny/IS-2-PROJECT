@@ -12,7 +12,7 @@ export function AuthProvider({ children }) {
       const res = await api.get('/auth/me');
       setUser(res.data.user);
     } catch (err) {
-      setUser(null);
+      if (err.response?.status === 401) setUser(null);
     } finally {
       setLoading(false);
     }
@@ -20,6 +20,8 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     refresh();
+    const timer = window.setInterval(refresh, 10000);
+    return () => window.clearInterval(timer);
   }, [refresh]);
 
   const login = async (email, password) => {

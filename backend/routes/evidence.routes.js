@@ -25,7 +25,8 @@ router.get('/:reportId/:fileId', async (req, res) => {
     if (!evidenceItem) return res.status(404).json({ error: 'Evidence file not found on this report' });
 
     const bucket = getBucket();
-    res.set('Content-Disposition', `inline; filename="${evidenceItem.filename}"`);
+    const filename = evidenceItem.filename.split(/[\\/]/).pop().replace(/[\u0000-\u001f\u007f]/g, '_');
+    res.set('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`);
     const storedFile = await bucket.find({ _id: evidenceItem.gridFsId }).next();
     if (!storedFile) return res.status(404).json({ error: 'File not found in storage' });
     if (storedFile.metadata && storedFile.metadata.contentType) {

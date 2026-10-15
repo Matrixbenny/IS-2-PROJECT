@@ -1,6 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import api from '../api';
 import { useAuth } from '../context/AuthContext';
+import EvidenceDownloads from '../components/EvidenceDownloads';
+import usePolling from '../hooks/usePolling';
 
 function statusClass(status) {
   return `status-${status.toLowerCase().replace(/\s+/g, '-')}`;
@@ -11,10 +13,19 @@ function MyReports() {
   const [reports, setReports] = useState([]);
   const [error, setError] = useState('');
 
-  useEffect(() => {
+  const loadReports = useCallback(async () => {
     if (!user) return;
-    api.get('/reports/mine').then((res) => setReports(res.data)).catch((err) => setError(err.response?.data?.error || err.message));
+    try {
+      const res = await api.get('/reports/mine');
+      setReports(res.data);
+      setError('');
+    } catch (loadError) {
+      setError(loadError.response?.data?.error || loadError.message);
+    }
   }, [user]);
+
+  useEffect(() => { loadReports(); }, [loadReports]);
+  usePolling(loadReports);
 
   if (!user) {
     return <div className="kw-helper">Log in to see reports you've submitted while signed in.</div>;
@@ -35,6 +46,7 @@ function MyReports() {
             <div className="kw-pro-meta"><span className="kw-tracking-chip">{r.trackingReference}</span></div>
             <div className="kw-pro-meta"><b>Category:</b> {r.reportedCategory}</div>
             <div className="kw-pro-meta"><b>Description:</b> {r.description}</div>
+            <EvidenceDownloads reportId={r._id} evidence={r.evidence} />
             {r.resolutionNote && (
               <div className="kw-pro-meta"><b>Resolution:</b> {r.resolutionNote} (Ref: {r.resolutionReference})</div>
             )}

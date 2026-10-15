@@ -5,6 +5,7 @@ const request = require('supertest');
 require('dotenv').config();
 const createApp = require('../app');
 const User = require('../user.model');
+const Report = require('../report.model');
 
 const TEST_MONGO_URI = process.env.TEST_MONGO_URI || 'mongodb://localhost:27017/kenya_watch_test';
 
@@ -70,4 +71,139 @@ test('POST /api/auth/login succeeds with the correct password', async () => {
 test('GET /api/auth/me requires authentication', async () => {
   const res = await request(app).get('/api/auth/me');
   assert.strictEqual(res.status, 401);
+});
+
+test('Admin user CRUD updates account data, removes deleted users, and anonymizes report references', async () => {
+  const admin = await User.create({
+    name: 'Account Admin',
+    email: 'account-admin@example.com',
+    password: 'StrongPassw0rd!',
+    role: 'admin'
+  });
+  const login = await request(app).post('/api/auth/login').send({
+    email: admin.email,
+    password: 'StrongPassw0rd!'
+  });
+  assert.strictEqual(login.status, 200);
+  const cookie = login.headers['set-cookie'].find((value) => value.startsWith('kw_token=')).split(';')[0];
+
+  const created = await request(app)
+    .post('/api/users')
+    .set('Cookie', cookie)
+    .send({
+      name: 'Managed Reviewer',
+      email: 'managed-reviewer@example.com',
+      password: 'StrongPassw0rd!',
+      role: 'reviewer'
+    });
+  assert.strictEqual(created.status, 201);
+  assert.strictEqual(created.body.role, 'reviewer');
+  assert.strictEqual(created.body.password, undefined);
+
+  const userId = created.body.id;
+  const user = await User.findById(userId);
+  const report = await Report.create({
+    trackingReference: 'KW-USER01',
+    title: 'User relation test',
+    reportedCategory: 'Bribery',
+    description: 'Verifies report relations survive account removal.',
+    county: 'Nairobi',
+    subCounty: 'Westlands',
+    user: user._id,
+    claimedBy: user._id,
+    archivedBy: user._id,
+    statusHistory: [{ status: 'In Review', changedBy: user._id }],
+    comments: [{ author: user._id, text: 'Reviewer note' }]
+  });
+  const otherUser = await User.create({
+    name: 'Unrelated Account',
+    email: 'unrelated-account@example.com',
+    password: 'StrongPassw0rd!'
+  });
+  const otherReport = await Report.create({
+    trackingReference: 'KW-USER02',
+    title: 'Other user relation test',
+    reportedCategory: 'Bribery',
+    description: 'Verifies deleting one account preserves other account references.',
+    county: 'Nairobi',
+    subCounty: 'Westlands',
+    user: otherUser._id,
+    claimedBy: user._id,
+    archivedBy: otherUser._id,
+    statusHistory: [
+      { status: 'Received', changedBy: otherUser._id },
+      { status: 'In Review', changedBy: user._id }
+    ],
+    comments: [
+      { author: otherUser._id, text: 'Other reviewer note' },
+      { author: user._id, text: 'Reviewer note' }
+    ]
+  });
+
+  const updated = await request(app)
+    .patch(`/api/users/${userId}`)
+    .set('Cookie', cookie)
+    .send({ name: 'Updated Reviewer', email: 'updated-reviewer@example.com' });
+  assert.strictEqual(updated.status, 200);
+  assert.strictEqual(updated.body.name, 'Updated Reviewer');
+  assert.strictEqual(updated.body.email, 'updated-reviewer@example.com');
+
+  const promoted = await request(app)
+    .patch(`/api/users/${userId}/role`)
+    .set('Cookie', cookie)
+    .send({ role: 'admin' });
+  assert.strictEqual(promoted.status, 200);
+
+  const listed = await request(app).get('/api/users').set('Cookie', cookie);
+  const listedUser = listed.body.find((item) => item._id === userId);
+  assert.ok(listedUser);
+  assert.strictEqual(listedUser.password, undefined);
+
+  const deleted = await request(app).delete(`/api/users/${userId}`).set('Cookie', cookie);
+  assert.strictEqual(deleted.status, 204);
+  assert.strictEqual(await User.findById(userId), null);
+  const retainedReport = await Report.findById(report._id);
+  assert.strictEqual(retainedReport.user, null);
+  assert.strictEqual(retainedReport.claimedBy, null);
+  assert.strictEqual(retainedReport.archivedBy, null);
+  assert.strictEqual(retainedReport.statusHistory[0].changedBy, null);
+  assert.strictEqual(retainedReport.comments[0].author, null);
+  const retainedOtherReport = await Report.findById(otherReport._id);
+  assert.strictEqual(retainedOtherReport.user.toString(), otherUser._id.toString());
+  assert.strictEqual(retainedOtherReport.claimedBy, null);
+  assert.strictEqual(retainedOtherReport.archivedBy.toString(), otherUser._id.toString());
+  assert.strictEqual(retainedOtherReport.statusHistory[0].changedBy.toString(), otherUser._id.toString());
+  assert.strictEqual(retainedOtherReport.statusHistory[1].changedBy, null);
+  assert.strictEqual(retainedOtherReport.comments[0].author.toString(), otherUser._id.toString());
+  assert.strictEqual(retainedOtherReport.comments[1].author, null);
+  assert.ok((await request(app).get('/api/users').set('Cookie', cookie)).body.every((item) => item._id !== userId));
+  await User.deleteOne({ _id: admin._id });
+  await User.deleteOne({ _id: otherUser._id });
+});
+
+test('Admins cannot delete themselves or remove the last Admin', async () => {
+  const admin = await User.create({
+    name: 'Sole Admin',
+    email: 'sole-admin@example.com',
+    password: 'StrongPassw0rd!',
+    role: 'admin'
+  });
+  const login = await request(app).post('/api/auth/login').send({
+    email: admin.email,
+    password: 'StrongPassw0rd!'
+  });
+  const cookie = login.headers['set-cookie'].find((value) => value.startsWith('kw_token=')).split(';')[0];
+
+  const selfDelete = await request(app).delete(`/api/users/${admin._id}`).set('Cookie', cookie);
+  assert.strictEqual(selfDelete.status, 409);
+
+  const demoteLastAdmin = await request(app)
+    .patch(`/api/users/${admin._id}/role`)
+    .set('Cookie', cookie)
+    .send({ role: 'reviewer' });
+  assert.strictEqual(demoteLastAdmin.status, 409);
+
+  const deleteLastAdmin = await request(app).delete(`/api/users/${admin._id}`).set('Cookie', cookie);
+  assert.strictEqual(deleteLastAdmin.status, 409);
+  assert.ok(await User.findById(admin._id));
 });

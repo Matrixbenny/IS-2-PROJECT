@@ -305,13 +305,13 @@ Only the optional citizen account (Path B) is open to public self-registration, 
 
 Automatically merging reports risks wrongly conflating distinct incidents. Instead, the ML module or a Reviewer can flag a new report as "possibly related" to existing cases (based on similar category, location, and time window) as a soft suggestion, and a Reviewer can manually link related case IDs together for investigative visibility. Each report always keeps its own independent identity and tracking reference — linking is additive, never destructive.
 
-### 17. Evidence files are stored in MongoDB GridFS, served only through an authenticated route, with identifying metadata stripped before storage
+### 17. Evidence files are stored in MongoDB GridFS and served only through an authorized route
 
-The target design stores uploaded evidence (images, video, audio, documents) using **MongoDB GridFS**, rather than a third-party cloud storage provider. This choice reuses the database connection the system already has, avoids introducing new external accounts/credentials, and — importantly — avoids the cross-border data transfer restriction verified earlier in the Data Protection Act (s.25(h): personal data must not be "transferred outside Kenya, unless there is proof of adequate data protection safeguards or consent"). Keeping files self-hosted inside the project's own MongoDB instance sidesteps that concern entirely.
+**Implemented:** uploaded evidence (images, video, audio, documents) is stored in MongoDB GridFS (`evidence.files` and `evidence.chunks`), rather than in a filesystem-only upload folder. This uses the database connection the system already has and avoids third-party storage credentials.
 
-Raw evidence files are never served through a public/direct URL. They are only retrievable through an authenticated backend route accepting one of three valid credentials: a Reviewer/Admin login, a Path B account holder viewing their own report, or the Tracking Reference + Access Key pair from decision #21 for that specific report only — the public case list only ever shows evidence metadata (file type, count, upload date), never the file content itself.
+Raw evidence is retrievable through an authorized API route: a Reviewer/Admin session, the Path B owner session, or the Tracking Reference + Access Key pair for that report. The public case list only exposes an evidence count; authorized case views can retrieve each original file.
 
-Critically for anonymity: photos and videos captured on phones commonly embed EXIF/metadata (GPS coordinates, device model, timestamps) that could re-identify a reporter's location or device even though the platform never captures their name. The upload pipeline strips all such embedded metadata from every file **before** it is persisted to GridFS, so this cannot silently undermine the anonymity guarantee from decisions #3 and #9.
+To meet the requirement that the database retain the exact uploaded file, the application stores the original bytes without image re-encoding and downloads those same bytes. This also preserves embedded EXIF/document metadata, which may include GPS, device, author, or timestamps that could identify a reporter. The submission form warns users to remove identifying metadata themselves before uploading when anonymity matters. Malware checks run against the original bytes before GridFS storage.
 
 ### 18. File uploads are restricted by type and size, and scanned before being persisted
 

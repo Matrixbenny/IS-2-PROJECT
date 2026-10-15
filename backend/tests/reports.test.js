@@ -6,6 +6,7 @@ require('dotenv').config();
 const createApp = require('../app');
 const Report = require('../report.model');
 const User = require('../user.model');
+const { getBucket } = require('../utils/gridfs');
 const { hashRecordingToken } = require('../utils/recordingToken');
 
 // A dedicated test database - never touches the real kenya_watch dev data.
@@ -16,6 +17,7 @@ let app;
 test.before(async () => {
   await mongoose.connect(TEST_MONGO_URI);
   app = createApp();
+  app.set('trust proxy', 1);
 });
 
 test.after(async () => {
@@ -183,6 +185,56 @@ test('live recording chunks persist to GridFS before finish and attach to an ano
   );
 });
 
+test('uploaded evidence bytes are stored unchanged in GridFS and downloaded unchanged', async () => {
+  const originalFile = Buffer.from(
+    '255044462d312e370a255acbcd0a312030206f626a0a3c3c202f54797065202f436174616c6f67203e3e0a656e646f626a0a2525454f460a',
+    'hex'
+  );
+  const captcha = await solvedCaptcha();
+  const response = await request(app)
+    .post('/api/reports')
+    .set('X-Forwarded-For', '198.51.100.17')
+    .field('title', 'Exact evidence file')
+    .field('reportedCategory', 'Bribery')
+    .field('description', 'A detailed report to verify exact evidence file persistence.')
+    .field('county', 'Nairobi')
+    .field('subCounty', 'Westlands')
+    .field('captchaToken', captcha.captchaToken)
+    .field('captchaAnswer', '')
+    .attach('evidence', originalFile, { filename: 'original.pdf', contentType: 'application/pdf' });
+
+  assert.strictEqual(response.status, 201);
+  const report = await Report.findById(response.body.reportId);
+  assert.strictEqual(report.evidence.length, 1);
+  const fileId = report.evidence[0].gridFsId;
+  const storedFile = await mongoose.connection.db.collection('evidence.files').findOne({ _id: fileId });
+  assert.strictEqual(storedFile.length, originalFile.length);
+  assert.strictEqual(storedFile.filename, 'original.pdf');
+  assert.ok(await mongoose.connection.db.collection('evidence.chunks').countDocuments({ files_id: fileId }) > 0);
+
+  const downloadedResponse = await request(app)
+    .get(`/api/evidence/${report._id}/${report.evidence[0]._id}`)
+    .query({ ref: report.trackingReference, key: response.body.accessKey })
+    .buffer(true)
+    .parse((stream, callback) => {
+      const chunks = [];
+      stream.on('data', (chunk) => chunks.push(chunk));
+      stream.on('end', () => callback(null, Buffer.concat(chunks)));
+    });
+  assert.strictEqual(downloadedResponse.status, 200);
+  assert.deepStrictEqual(downloadedResponse.body, originalFile);
+  assert.match(downloadedResponse.headers['content-disposition'], /original\.pdf/);
+
+  const downloaded = await new Promise((resolve, reject) => {
+    const chunks = [];
+    getBucket().openDownloadStream(fileId)
+      .on('data', (chunk) => chunks.push(chunk))
+      .on('error', reject)
+      .on('end', () => resolve(Buffer.concat(chunks)));
+  });
+  assert.deepStrictEqual(downloaded, originalFile);
+});
+
 test('GET /api/reports (public list) never exposes the narrative description', async () => {
   const res = await request(app).get('/api/reports');
   assert.strictEqual(res.status, 200);
@@ -266,4 +318,58 @@ test('DELETE /api/reports/:id refuses to archive reports under legal hold', asyn
     .set('Cookie', cookie);
   assert.strictEqual(archived.status, 409);
   assert.strictEqual((await Report.findById(report._id)).archivedAt, null);
+});
+
+test('archived reports can be restored or permanently deleted with their GridFS evidence', async () => {
+  const admin = await User.create({
+    name: 'Archive Lifecycle Admin',
+    email: 'archive-lifecycle-admin@example.com',
+    password: 'StrongPassw0rd!',
+    role: 'admin'
+  });
+  const login = await request(app).post('/api/auth/login').send({
+    email: admin.email,
+    password: 'StrongPassw0rd!'
+  });
+  assert.strictEqual(login.status, 200);
+  const cookie = login.headers['set-cookie'].find((value) => value.startsWith('kw_token=')).split(';')[0];
+
+  const report = await Report.create({
+    trackingReference: 'KW-LIFEC01',
+    title: 'Archived lifecycle test',
+    reportedCategory: 'Bribery',
+    description: 'A report used to test restore and permanent deletion.',
+    county: 'Nairobi',
+    subCounty: 'Westlands'
+  });
+  const bucket = getBucket();
+  const fileId = new mongoose.Types.ObjectId();
+  await new Promise((resolve, reject) => {
+    const stream = bucket.openUploadStreamWithId(fileId, 'lifecycle-evidence.pdf');
+    stream.on('error', reject);
+    stream.on('finish', resolve);
+    stream.end(Buffer.from('stored evidence'));
+  });
+  report.evidence.push({ gridFsId: fileId, filename: 'lifecycle-evidence.pdf', type: 'document' });
+  report.archivedAt = new Date();
+  await report.save();
+
+  const archivedList = await request(app).get('/api/reports/archived').set('Cookie', cookie);
+  assert.ok(archivedList.body.some((item) => item._id === report._id.toString()));
+
+  const restored = await request(app)
+    .patch(`/api/reports/${report._id}/restore`)
+    .set('Cookie', cookie);
+  assert.strictEqual(restored.status, 200);
+  assert.strictEqual((await Report.findById(report._id)).archivedAt, null);
+  assert.strictEqual((await request(app).get(`/api/reports/${report._id}`)).status, 200);
+
+  await request(app).delete(`/api/reports/${report._id}`).set('Cookie', cookie).expect(204);
+  const permanent = await request(app)
+    .delete(`/api/reports/${report._id}/permanent`)
+    .set('Cookie', cookie);
+  assert.strictEqual(permanent.status, 204);
+  assert.strictEqual(await Report.findById(report._id), null);
+  assert.strictEqual(await mongoose.connection.db.collection('evidence.files').findOne({ _id: fileId }), null);
+  assert.strictEqual(await mongoose.connection.db.collection('evidence.chunks').countDocuments({ files_id: fileId }), 0);
 });

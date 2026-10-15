@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api';
 import { useLanguage } from '../context/LanguageContext';
+import usePolling from '../hooks/usePolling';
 
 function statusClass(status) {
   return `status-${status.toLowerCase().replace(/\s+/g, '-')}`;
@@ -13,12 +14,20 @@ function Home() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    api.get('/reports')
-      .then((res) => setReports(res.data))
-      .catch(() => setError('Failed to load reports. Is the backend running?'))
-      .finally(() => setLoading(false));
+  const loadReports = useCallback(async () => {
+    try {
+      const res = await api.get('/reports');
+      setReports(res.data);
+      setError('');
+    } catch (loadError) {
+      setError(loadError.response?.data?.error || 'Failed to load reports. Is the backend running?');
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => { loadReports(); }, [loadReports]);
+  usePolling(loadReports);
 
   return (
     <div>

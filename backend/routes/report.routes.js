@@ -7,7 +7,7 @@ const { generateTrackingReference, generateAccessKey, hashSecret, verifySecret }
 const { classifyReportText } = require('../utils/classifier');
 const { upload } = require('../middleware/upload');
 const { storeEvidenceFile } = require('../utils/evidence');
-const { getBucket } = require('../utils/gridfs');
+const { getBucket, deleteGridFsFile } = require('../utils/gridfs');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { AGENCIES, suggestAgencyForCategory } = require('../utils/agencies');
 const { sendMail } = require('../utils/mailer');
@@ -113,6 +113,8 @@ router.post('/captcha-verify', (req, res) => {
 // POST /api/reports - submit a new report, Path A (anonymous) or Path B (logged in) side by side (decision #3).
 router.post('/', upload.array('evidence', 10), async (req, res) => {
   let claimedRecordingId;
+  const uploadedEvidenceIds = [];
+  let reportSaved = false;
   try {
     const { reportedCategory, captchaToken, captchaAnswer } = req.body;
     if (!captchaToken || !verifyChallenge(captchaToken, captchaAnswer)) {
@@ -174,12 +176,14 @@ router.post('/', upload.array('evidence', 10), async (req, res) => {
       }
     }
 
-    // Evidence files are streamed through sharp (images) and written to GridFS (decision #17/#18).
+    // Original uploaded bytes are written to GridFS after malware scanning.
     const evidence = [];
     if (req.files && req.files.length) {
       const bucket = getBucket();
       for (const file of req.files) {
-        evidence.push(await storeEvidenceFile(bucket, file));
+        const storedEvidence = await storeEvidenceFile(bucket, file);
+        uploadedEvidenceIds.push(storedEvidence.gridFsId);
+        evidence.push(storedEvidence);
       }
     }
     if (recordingSession) {
@@ -235,6 +239,7 @@ router.post('/', upload.array('evidence', 10), async (req, res) => {
       claimedRecordingId = recordingSession._id;
     }
     await report.save();
+    reportSaved = true;
     if (claimedRecordingId) {
       try {
         await mongoose.connection.db.collection('recordingSessions').deleteOne({ _id: claimedRecordingId });
@@ -255,6 +260,15 @@ router.post('/', upload.array('evidence', 10), async (req, res) => {
     };
     return res.status(201).json(response);
   } catch (err) {
+    if (!reportSaved) {
+      for (const fileId of uploadedEvidenceIds) {
+        try {
+          await deleteGridFsFile(fileId);
+        } catch (cleanupError) {
+          console.error('Could not remove evidence from a failed report submission:', cleanupError.message);
+        }
+      }
+    }
     if (claimedRecordingId) {
       await mongoose.connection.db.collection('recordingSessions').updateOne(
         { _id: claimedRecordingId, status: 'attaching' },
@@ -297,6 +311,15 @@ function findActiveReport(id) {
 router.get('/queue', requireRole('reviewer', 'admin'), async (req, res) => {
   try {
     const reports = await Report.find({ archivedAt: null }).sort({ createdAt: -1 }).limit(200);
+    return res.json(reports.map(withSuggestedAgency));
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/archived', requireRole('admin'), async (req, res) => {
+  try {
+    const reports = await Report.find({ archivedAt: { $ne: null } }).sort({ archivedAt: -1 }).limit(200);
     return res.json(reports.map(withSuggestedAgency));
   } catch (err) {
     return res.status(500).json({ error: err.message });
@@ -466,6 +489,40 @@ router.delete('/:id', requireRole('admin'), async (req, res) => {
     return res.status(204).end();
   } catch (err) {
     return res.status(400).json({ error: err.message });
+  }
+});
+
+router.patch('/:id/restore', requireRole('admin'), async (req, res) => {
+  try {
+    const report = await Report.findOne({ _id: req.params.id, archivedAt: { $ne: null } });
+    if (!report) return res.status(404).json({ error: 'Archived report not found' });
+    report.archivedAt = null;
+    await report.save();
+    return res.json(withSuggestedAgency(report));
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
+  }
+});
+
+router.delete('/:id/permanent', requireRole('admin'), async (req, res) => {
+  try {
+    const report = await Report.findOne({ _id: req.params.id, archivedAt: { $ne: null } });
+    if (!report) return res.status(404).json({ error: 'Archived report not found' });
+    if (report.legalHold) return res.status(409).json({ error: 'A report under legal hold cannot be permanently deleted' });
+
+    const fileIds = report.evidence.map((item) => item.gridFsId);
+    for (const fileId of fileIds) {
+      await deleteGridFsFile(fileId);
+    }
+    await Report.updateMany(
+      { relatedCaseLinks: report._id },
+      { $pull: { relatedCaseLinks: report._id } }
+    );
+    await Report.deleteOne({ _id: report._id, archivedAt: { $ne: null } });
+    return res.status(204).end();
+  } catch (err) {
+    console.error('Could not permanently delete archived report:', err.message);
+    return res.status(500).json({ error: 'Could not permanently delete the archived report and its evidence.' });
   }
 });
 
