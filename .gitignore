@@ -7,10 +7,13 @@
 !/backend/
 !/frontend/
 !/agency-portal/
+!/ml/
 !/README.md
 
 # ...except build artifacts, dependencies and secrets inside those app folders.
 node_modules/
+__pycache__/
+*.py[cod]
 build/
 dist/
 .env
@@ -18,3 +21,9 @@ backend/data/
 backend/cookies.txt
 backend/*.log
 frontend/*.log
+ml/data/raw/
+ml/data/approved/
+ml/data/processed/
+ml/artifacts/
+ml/models/
+ml/reports/

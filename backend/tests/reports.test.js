@@ -8,18 +8,24 @@ const Report = require('../report.model');
 const User = require('../user.model');
 const { getBucket } = require('../utils/gridfs');
 const { hashRecordingToken } = require('../utils/recordingToken');
+const { AGENCIES, slugify } = require('../utils/agencies');
+const { verifyImageSelection } = require('../utils/imageCaptcha');
 
 // A dedicated test database - never touches the real kenya_watch dev data.
 const TEST_MONGO_URI = process.env.TEST_MONGO_URI || 'mongodb://localhost:27017/kenya_watch_test';
 
 let app;
 
+// Test admins are seeded with a database password, so clear the environment hash
+// (which may be set in the developer's .env) to make the seeded password authoritative.
 async function loginAsAdmin(email, password) {
   process.env.ADMIN_EMAIL = email;
+  delete process.env.ADMIN_PASSWORD_HASH;
   return request(app).post('/api/auth/login').send({ email, password });
 }
 
 test.before(async () => {
+  process.env.NODE_ENV = 'test';
   await mongoose.connect(TEST_MONGO_URI);
   app = createApp();
   app.set('trust proxy', 1);
@@ -30,19 +36,27 @@ test.after(async () => {
   await mongoose.disconnect();
 });
 
-// Use the same behavioral verification endpoint as the report form. When the
-// interaction check is inconclusive, the endpoint returns a separate challenge.
+function combinations(values, size, start = 0, prefix = [], output = []) {
+  if (prefix.length === size) {
+    output.push(prefix);
+    return output;
+  }
+  for (let index = start; index <= values.length - (size - prefix.length); index++) {
+    combinations(values, size, index + 1, [...prefix, values[index]], output);
+  }
+  return output;
+}
+
 async function solvedCaptcha() {
-  const res = await request(app).post('/api/reports/captcha-verify').send({
-    timeSpentMs: 5000,
-    pointerMoves: 5,
-    keyEvents: 0,
-    honeypot: '',
-    hasPointer: true
-  });
+  const res = await request(app).get('/api/reports/captcha-image');
   assert.strictEqual(res.status, 200);
-  assert.strictEqual(res.body.verified, true);
-  return { captchaToken: res.body.token, captchaAnswer: '' };
+  let selected;
+  for (let size = 2; size <= 5 && !selected; size++) {
+    selected = combinations(Array.from({ length: 9 }, (_, index) => index), size)
+      .find((ids) => verifyImageSelection(res.body.token, ids));
+  }
+  assert.ok(selected, 'image challenge should have a valid selection');
+  return { captchaToken: res.body.token, captchaAnswer: JSON.stringify(selected) };
 }
 
 test('GET /api/reports/categories returns the fixed category list and fields', async () => {
@@ -51,6 +65,22 @@ test('GET /api/reports/categories returns the fixed category list and fields', a
   assert.ok(Array.isArray(res.body.categories));
   assert.ok(res.body.categories.includes('Bribery'));
   assert.ok(res.body.fields.Bribery.some((f) => f.name === 'officialRole'));
+});
+
+test('CAPTCHA endpoints issue challenge-only verification and remove the behavior bypass', async () => {
+  const challenge = await request(app).get('/api/reports/captcha-image');
+  assert.strictEqual(challenge.status, 200);
+  assert.strictEqual(challenge.body.imageMode, true);
+  assert.strictEqual(challenge.body.tiles.length, 9);
+
+  const removedBypass = await request(app).post('/api/reports/captcha-verify').send({
+    timeSpentMs: 60000,
+    pointerMoves: 100,
+    keyEvents: 100,
+    hasPointer: true
+  });
+  assert.strictEqual(removedBypass.status, 404);
+  assert.strictEqual(removedBypass.body.token, undefined);
 });
 
 test('GET /api/reports/admin-overview returns exact database counts and is Admin-only', async () => {
@@ -81,7 +111,17 @@ test('GET /api/reports/admin-overview returns exact database counts and is Admin
       county: 'Nairobi',
       subCounty: 'Westlands',
       status: 'In Review',
-      classification: { urgency: 'Critical', classifiedAt: new Date(Date.now() - 60 * 60 * 1000) }
+      classification: { urgency: 'Critical', classifiedAt: new Date(Date.now() - 60 * 60 * 1000) },
+      agencyReferral: {
+        agency: 'Ethics and Anti-Corruption Commission (EACC)',
+        referenceNumber: 'EACC-TEST-1',
+        referredAt: new Date(),
+        agencyUpdates: [{
+          note: 'Acknowledgement received.',
+          publicMessage: 'A reporter message awaiting moderation.',
+          publicMessageStatus: 'pending'
+        }]
+      }
     },
     {
       trackingReference: 'KW-OVRHI1',
@@ -132,6 +172,18 @@ test('GET /api/reports/admin-overview returns exact database counts and is Admin
   });
   const adminLogin = await loginAsAdmin(admin.email, 'StrongPassw0rd!');
   const adminCookie = adminLogin.headers['set-cookie'].find((value) => value.startsWith('kw_token=')).split(';')[0];
+  await User.create(AGENCIES.slice(0, 2).map((agency, index) => ({
+    name: `Agency Officer ${index + 1}`,
+    email: `agency-officer-${index + 1}@example.gov`,
+    password: 'AgencyOfficerPass1!',
+    role: 'agency',
+    agencySlug: slugify(agency.name),
+    agencyVerificationReference: `Test verification ${index + 1}`,
+    agencyVerifiedBy: admin._id,
+    agencyVerifiedAt: new Date(),
+    agencyInvitationAcceptedAt: new Date(),
+    isActive: true
+  })));
   const response = await request(app)
     .get('/api/reports/admin-overview')
     .set('Cookie', adminCookie);
@@ -160,7 +212,8 @@ test('GET /api/reports/admin-overview returns exact database counts and is Admin
     total: Object.values(roleCounts).reduce((total, count) => total + count, 0),
     admins: roleCounts.admin || 0,
     reviewers: roleCounts.reviewer || 0,
-    users: roleCounts.user || 0
+    users: roleCounts.user || 0,
+    agencyOfficers: roleCounts.agency || 0
   });
   assert.deepStrictEqual(
     response.body.attention.slice(0, 2).map((report) => report._id),
@@ -172,6 +225,86 @@ test('GET /api/reports/admin-overview returns exact database counts and is Admin
     attentionCases[3]._id.toString(),
     attentionCases[4]._id.toString()
   ].includes(report._id)));
+  assert.deepStrictEqual(response.body.agencyReferrals.byAgency, [{
+    _id: 'Ethics and Anti-Corruption Commission (EACC)',
+    reports: 1,
+    updates: 1
+  }]);
+  assert.strictEqual(response.body.agencyReferrals.total, 1);
+  assert.strictEqual(response.body.agencyReferrals.updates, 1);
+  assert.strictEqual(response.body.agencyReferrals.pendingReporterMessages, 1);
+  assert.strictEqual(response.body.agencyReferrals.messagesForReview[0].reportId, attentionCases[0]._id.toString());
+  assert.strictEqual(response.body.agencyReferrals.recent[0]._id, attentionCases[0]._id.toString());
+
+  const invalidAgency = await request(app)
+    .post(`/api/reports/${attentionCases[0]._id}/refer`)
+    .set('Cookie', adminCookie)
+    .send({ agency: 'Not a configured agency' });
+  assert.strictEqual(invalidAgency.status, 400);
+
+  const updatedReferral = await request(app)
+    .post(`/api/reports/${attentionCases[0]._id}/refer`)
+    .set('Cookie', adminCookie)
+    .send({
+      agency: AGENCIES[1].name,
+      referenceNumber: 'DCI-TEST-2',
+      notes: 'Internal follow-up contact made.',
+      referralSummary: 'A verified and minimal summary for the receiving agency to assess and follow up on the reported matter.',
+      transferConfirmed: true
+    });
+  assert.strictEqual(updatedReferral.status, 200);
+  assert.strictEqual(updatedReferral.body.agencyReferral.agencyUpdates.length, 0);
+  assert.strictEqual(updatedReferral.body.agencyReferral.referenceNumber, 'DCI-TEST-2');
+  assert.strictEqual(updatedReferral.body.agencyReferral.previousReferrals[0].agency, AGENCIES[0].name);
+  assert.strictEqual(updatedReferral.body.agencyReferral.previousReferrals[0].agencyUpdates.length, 1);
+  assert.strictEqual(updatedReferral.body.agencyReferral.previousReferrals[0].agencyUpdates[0].publicMessageStatus, 'superseded');
+
+  const duplicateReferral = await request(app)
+    .post(`/api/reports/${attentionCases[0]._id}/refer`)
+    .set('Cookie', adminCookie)
+    .send({
+      agency: AGENCIES[1].name,
+      referralSummary: 'A duplicate packet should not silently restart a referral lifecycle.',
+      transferConfirmed: true
+    });
+  assert.strictEqual(duplicateReferral.status, 409);
+
+  const transferredReferral = await request(app)
+    .post(`/api/reports/${attentionCases[0]._id}/refer`)
+    .set('Cookie', adminCookie)
+    .send({
+      agency: AGENCIES[0].name,
+      referralSummary: 'A new receiving agency has a documented reason to receive this minimal case brief.',
+      transferConfirmed: true
+    });
+  assert.strictEqual(transferredReferral.status, 200);
+  assert.strictEqual(transferredReferral.body.agencyReferral.agencyUpdates.length, 0);
+  assert.strictEqual(transferredReferral.body.agencyReferral.previousReferrals.length, 2);
+  assert.strictEqual(transferredReferral.body.agencyReferral.previousReferrals[0].agencyUpdates.length, 1);
+
+  const legacyReferral = await Report.create({
+    trackingReference: 'KW-LEGACY1',
+    title: 'Legacy handoff needing a structured brief',
+    reportedCategory: 'Bribery',
+    description: 'An old demo referral must be deliberately prepared before portal access.',
+    county: 'Nairobi',
+    subCounty: 'Westlands',
+    agencyReferral: {
+      agency: AGENCIES[0].name,
+      agencyUpdates: [{ note: 'Earlier demo update.' }]
+    }
+  });
+  const upgradedLegacyReferral = await request(app)
+    .post(`/api/reports/${legacyReferral._id}/refer`)
+    .set('Cookie', adminCookie)
+    .send({
+      agency: AGENCIES[0].name,
+      referralSummary: 'The reviewer has prepared a new minimum-data brief for the authorised agency portal.',
+      transferConfirmed: true
+    });
+  assert.strictEqual(upgradedLegacyReferral.status, 200);
+  assert.strictEqual(upgradedLegacyReferral.body.agencyReferral.referralSummary.length > 40, true);
+  assert.strictEqual(upgradedLegacyReferral.body.agencyReferral.previousReferrals[0].agencyUpdates[0].note, 'Earlier demo update.');
 });
 
 test('POST /api/reports rejects a submission missing required fields', async () => {
@@ -326,7 +459,7 @@ test('uploaded evidence bytes are stored unchanged in GridFS and downloaded unch
     .field('county', 'Nairobi')
     .field('subCounty', 'Westlands')
     .field('captchaToken', captcha.captchaToken)
-    .field('captchaAnswer', '')
+    .field('captchaAnswer', captcha.captchaAnswer)
     .attach('evidence', originalFile, { filename: 'original.pdf', contentType: 'application/pdf' });
 
   assert.strictEqual(response.status, 201);
@@ -489,4 +622,98 @@ test('archived reports can be restored or permanently deleted with their GridFS 
   assert.strictEqual(await Report.findById(report._id), null);
   assert.strictEqual(await mongoose.connection.db.collection('evidence.files').findOne({ _id: fileId }), null);
   assert.strictEqual(await mongoose.connection.db.collection('evidence.chunks').countDocuments({ files_id: fileId }), 0);
+});
+
+// ---------------------------------------------------------------------------
+// Security-critical regressions (fix #11): the two behaviors most likely to be
+// broken silently by a future edit are (a) evidence authorization and (b)
+// captcha fail-closed verification. These tests pin both.
+
+test('GET /api/evidence rejects unauthenticated, wrong-key, and wrong-report access', async () => {
+  // A Path A report with a known Access Key and one uploaded file.
+  const captcha = await solvedCaptcha();
+  const unique = Date.now();
+  const created = await request(app)
+    .post('/api/reports')
+    .field('title', `Evidence auth test ${unique}`)
+    .field('reportedCategory', 'Bribery')
+    .field('description', 'Security regression test for the evidence authorization rules.')
+    .field('county', 'Nairobi')
+    .field('subCounty', 'Central')
+    .field('captchaToken', captcha.captchaToken)
+    .field('captchaAnswer', captcha.captchaAnswer)
+    .attach('evidence', Buffer.from('secret-evidence-bytes'), { filename: 'secret-note.pdf', contentType: 'application/pdf' });
+  assert.strictEqual(created.status, 201);
+  const report = await Report.findById(created.body.reportId);
+  assert.ok(report.evidence.length >= 1);
+  const evidenceUrl = `/api/evidence/${report._id}/${report.evidence[0]._id}`;
+
+  // 1. No credentials at all -> 403 (never leak whether the file exists).
+  const anonymous = await request(app).get(evidenceUrl);
+  assert.strictEqual(anonymous.status, 403);
+
+  // 2. Correct reference but WRONG access key -> 403.
+  const wrongKey = await request(app).get(evidenceUrl)
+    .query({ ref: report.trackingReference, key: 'wrong-key ENTIRELY' });
+  assert.strictEqual(wrongKey.status, 403);
+
+  // 3. Valid key but WRONG tracking reference -> 403.
+  const wrongRef = await request(app).get(evidenceUrl)
+    .query({ ref: 'KW-AAAAAA', key: created.body.accessKey });
+  assert.strictEqual(wrongRef.status, 403);
+
+  // 4. Correct pair -> 200 with the exact stored bytes.
+  const correct = await request(app).get(evidenceUrl)
+    .query({ ref: report.trackingReference, key: created.body.accessKey })
+    .buffer(true);
+  assert.strictEqual(correct.status, 200);
+  assert.strictEqual(correct.body.toString(), 'secret-evidence-bytes');
+});
+
+test('captcha verification fails closed on tampered, wrong-signature, and wrong-answer tokens', async () => {
+  const { generateChallenge, verifyChallenge } = require('../utils/captcha');
+
+  // 1. Correct answer to a fresh text challenge passes.
+  const challenge = generateChallenge();
+  const payload = require('jsonwebtoken').decode(challenge.token);
+  // Recover the answer from the question type generators deterministically:
+  // brute-force small candidate spaces per layer until verifyChallenge returns true,
+  // proving a valid answer IS accepted.
+  let validAnswer = null;
+  const candidates = [];
+  for (let n = 0; n <= 30; n++) candidates.push(String(n));
+  const wordCandidates = ['kenya', 'honesty', 'report', 'citizen', 'safari', 'justice', 'nairobi',
+    'table', 'water', 'money', 'bread', 'grass', 'stone', 'chair', 'spoon', 'tiger', 'london',
+    'fruit', 'animal', 'colour', 'city in kenya', 'mango', 'banana', 'orange', 'dog', 'cat',
+    'rabbit', 'red', 'blue', 'green', 'kisumu', 'mombasa'];
+  candidates.push(...wordCandidates);
+  for (const candidate of candidates) {
+    if (verifyChallenge(challenge.token, candidate)) { validAnswer = candidate; break; }
+  }
+  assert.ok(validAnswer, 'a genuinely correct answer must be accepted');
+
+  // 2. A wrong answer to a valid token fails.
+  assert.strictEqual(verifyChallenge(challenge.token, 'definitely-not-the-answer'), false);
+
+  // 3. A tampered token (payload edited, signature stripped) fails closed.
+  const [header, , signature] = challenge.token.split('.');
+  const forgedPayload = Buffer.from(JSON.stringify({ kind: 'challenge', answerHash: 'f' * 64 }))
+    .toString('base64url');
+  assert.strictEqual(verifyChallenge(`${header}.${forgedPayload}.${signature}`, validAnswer), false);
+
+  // 4. A token signed with the WRONG secret fails (simulates secret rotation attacks).
+  const otherSecret = require('jsonwebtoken').sign(
+    { kind: 'behavior' },
+    'attacker-controlled-secret-that-is-not-ours'
+  );
+  assert.strictEqual(verifyChallenge(otherSecret, ''), false);
+
+  // 5. An expired token fails. Sign one with a -1s lifetime using the real secret.
+  const realSecret = process.env.CAPTCHA_SECRET || process.env.JWT_SECRET;
+  const expired = require('jsonwebtoken').sign({ kind: 'behavior' }, realSecret, { expiresIn: -1 });
+  assert.strictEqual(verifyChallenge(expired, ''), false);
+
+  // 6. Garbage / empty tokens fail.
+  assert.strictEqual(verifyChallenge('not-a-jwt', ''), false);
+  assert.strictEqual(verifyChallenge('', ''), false);
 });

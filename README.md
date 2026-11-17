@@ -1,8 +1,8 @@
 # Kenya Watch
 
-A machine learning-assisted web platform for anonymous reporting and tracking of corruption cases in Kenya. Final year Information Systems project (BBT4300), Strathmore University, School of Computing and Engineering Sciences.
+A web platform prototype for anonymous reporting and tracking of corruption cases in Kenya, with keyword-based triage, reviewer-facing TF-IDF related-report suggestions, and a synthetic-trained ML category suggestion shown to reviewers only after their independent assessment. Final year Information Systems project (BBT4300), Strathmore University, School of Computing and Engineering Sciences.
 
-Citizens can report corruption either fully anonymously (no account, tracked later via a **Tracking Reference + secret Access Key**) or through an optional account (**Path B**, unlocking a private "My Reports" view). Reports are triaged by Reviewers with ML-assisted classification, can be referred to the relevant oversight agency, and resolution outcomes are tracked back to the reporter — all without ever requiring or exposing a reporter's identity.
+Citizens can report corruption without an account (Path A, tracked via a **Tracking Reference + secret Access Key**) or through an optional account (Path B, with a private "My Reports" view). Reviewers triage reports, which can be referred through the prototype's agency workflow, and track outcomes. Path A is not linked to a reporter account, but narrative details and original evidence may still reveal a person's identity.
 
 See [Docs/my IS story.md](Docs/my%20IS%20story.md) for the full set of 30 researched, legally-grounded design decisions behind this system.
 
@@ -12,21 +12,24 @@ See [Docs/my IS story.md](Docs/my%20IS%20story.md) for the full set of 30 resear
 - Optional live audio/video recording during report submission, with recording segments saved to GridFS while recording
 - Installable Progressive Web App (PWA) for supported browsers; the offline shell does not cache API or report data
 - Tracking Reference + Access Key capability-based case tracking for anonymous reporters, with a general/deep visibility split
-- Lightweight keyword-based ML classification (category + urgency), running asynchronously so it never blocks submission
+- Asynchronous keyword-based category and urgency triage suggestions; after a reviewer submits an independent label, the queue can show an explicitly experimental synthetic-trained ML category suggestion and TF-IDF text similarity ranks possible same-county related reports, with human judgement required
 - Reviewer Queue: claim cases, update status (resolution requires a note + reference), refer to an Agency/Institution, link related cases; Admins can archive reports without destroying the audit record or evidence
 - Admin overview with live report, workflow, account, and escalation counts plus an urgency-ranked list of unclaimed cases; account management, archived-report controls, and data-retention/anonymization tooling
 - One configured Admin identity: Admin access is limited to `ADMIN_EMAIL`, while the salted password hash stays in MongoDB; public registration and account-management APIs cannot create, promote, reassign, or delete that Admin account
-- Public statistics page (aggregate-only) and a demo "Agency Partner Portal" concept prototype
+- Reviewer access is approval-gated: applicants submit a statement, CV/resume, and proof of relevant qualification/training as PDFs; they cannot sign in or access reports while pending. Admins open the documents, attest to their manual authenticity/relevance check, and approve or reject applications in Manage Users. Submitted PDFs are deleted from storage after either decision; national ID and police-clearance documents are not requested. Admins can also directly provision reviewers
+- Agency case portal with named, agency-scoped accounts; reviewer-prepared minimum-data referral briefs; an auditable acknowledgement and follow-up lifecycle; and Admin-reviewed reporter messages
+- Public statistics page (aggregate-only) and a role-restricted Agency Case Portal
 - English/Kiswahili language toggle
 - Security: helmet security headers, rate limiting, a self-hosted CAPTCHA for anonymous submissions, bcrypt password hashing, httpOnly JWT cookie auth
 
 ## Tech Stack
 - **Backend**: Node.js, Express, MongoDB + Mongoose (with GridFS for evidence), JWT auth, Nodemailer
-- **Frontend**: React (Create React App), React Router
-- **Testing**: Node's built-in test runner (`node:test`) + Supertest for the backend; React Testing Library for the frontend
+- **Frontend**: React 19 (Vite), React Router
+- **Testing**: Node's built-in test runner (`node:test`) + Supertest for the backend; Vitest + React Testing Library for the frontend
+- **ML experiments**: Isolated workflow in [`ml/`](ml/README.md), with [data-source guidance](ml/DATA_SOURCES.md); private datasets and trained artifacts are excluded from Git
 
 ## Prerequisites
-- Node.js 18+ and npm
+- Node.js 20.19+ and npm
 - MongoDB Community Server (tested with a standalone `mongod`, not a replica set)
 
 ## Getting Started
@@ -39,29 +42,43 @@ This project connects to MongoDB on port **27017**, using the `kenya_watch` data
 cd backend
 npm install
 ```
-Copy `.env` (already present for local dev) and adjust as needed. `ADMIN_EMAIL` is the one allowed Admin identity; it is reserved from public registration. Do not put Admin passwords in source code or commit them. Admin passwords are stored as salted hashes in MongoDB.
+Create a local `.env` from the example and adjust it as needed:
+```powershell
+Copy-Item .env.example .env
+```
+`ADMIN_EMAIL` is the one allowed Admin identity; it is reserved from public registration. Admin password hashes are kept in the ignored local `.env`, not in MongoDB. Do not commit credentials or expose the demo server to a shared or internet-accessible network.
 ```
 PORT=5000
 MONGO_URI=mongodb://localhost:27017/kenya_watch
 JWT_SECRET=<replace-with-a-long-random-string-before-any-real-deployment>
 JWT_EXPIRES_IN=7d
 ADMIN_EMAIL=<the single Admin account email>
+ADMIN_PASSWORD_HASH=<generated by scripts/set-admin-password.js>
+FRONTEND_ORIGIN=http://localhost:3000
 NODE_ENV=development
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=officialbillionaire.ke@gmail.com
+SMTP_PASS=<Google App Password>
+MAIL_FROM="Kenya Watch <officialbillionaire.ke@gmail.com>"
 ```
+To send mail from Gmail, enable 2-Step Verification on the account and create a Google App Password. Put that App Password in `SMTP_PASS` in the ignored local `.env` or a deployment secret store; never share or commit it. The Gmail account's App Password is not the same as its normal sign-in password. Email delivery must be tested after configuring this. For local-only Ethereal email testing, set `MAIL_LOG_PREVIEW_URL=true` only in a private development environment; preview URLs grant access to messages. See [`backend/.env.example`](backend/.env.example) for configuration keys.
 Run the server:
 ```powershell
 npm start
 ```
-The API is now available at `http://localhost:5000`. The demo Agency Partner Portal is served at `http://localhost:5000/agency-portal/`.
+The API is now available at `http://localhost:5000`. The Agency Case Portal is served at `http://localhost:5000/agency-portal/`.
 
-Create the first Admin account (one-time, command-line only - the email must match `ADMIN_EMAIL`, and the script refuses to run if an account or Admin already exists):
+Configure the Admin password without storing it in MongoDB. In an interactive terminal, run the hidden-input setup script; it stores only a salted bcrypt hash in the ignored `backend/.env` file and removes the password field from the existing Admin record:
 ```powershell
-$securePassword = Read-Host "Admin password" -AsSecureString
-$env:ADMIN_BOOTSTRAP_PASSWORD = [System.Net.NetworkCredential]::new("", $securePassword).Password
-node scripts/bootstrap-admin.js "Full Name" "admin@example.com"
-Remove-Item Env:ADMIN_BOOTSTRAP_PASSWORD
+node scripts/set-admin-password.js
 ```
-The Admin password is entered without echoing it or placing it in the command history/process arguments. For an existing Admin account, use its configured email and password at `/login`; do not run the bootstrap script.
+Choose a new, unique Admin password when prompted; input is hidden. The Admin login password is compared against `ADMIN_PASSWORD_HASH` and is not stored in MongoDB. For a fresh database with no Admin record, first run this script, then create the record using the email in `ADMIN_EMAIL`:
+```powershell
+node scripts/bootstrap-admin.js "Full Name" "officialbillionaire.ke@gmail.com"
+```
+Restart the backend after changing the local `.env`. Sign in with the configured Admin email and the password entered at the hidden prompt. Do not put that password in a command, source file, or message.
 
 ### 3. Frontend
 ```powershell
@@ -69,13 +86,32 @@ cd frontend
 npm install
 npm start
 ```
-The app opens at `http://localhost:3000`.
+The app opens at `http://localhost:3000` (Vite dev server).
+
+### Try the Agency workflow locally
+Use synthetic test data only. Sign in as Admin, open **Manage users**, and create a test agency officer using a test email and a verification reference clearly marked as test data. Copy the one-time setup link, set that account's password, and sign in at `http://localhost:5000/agency-portal/`. The agency will appear as an available referral destination only after the officer has activated their account. From the Reviewer Queue, prepare and send a minimum-data referral brief; the portal can then acknowledge and update it. Use the Admin overview and the report's private tracking view to follow the response and approve a proposed reporter message.
+
+### Local demo accounts
+For manual testing convenience, these non-Admin accounts may be seeded locally (synthetic data, dev only):
+
+| Role | Email | Password |
+|---|---|---|
+| Reviewer | `amina@example.com` | `ReviewerPass123!` |
+| Agency officer (EACC) | `agencyofficer@kenyawatch.local` | `AgencyPass123!` |
+
+The Admin password is configured locally and is not a shared demo credential. The agency officer signs in at the **Agency Case Portal** (`http://localhost:5000/agency-portal/`); the others sign in through the React app at `http://localhost:3000`. `backend/scripts/set-password.js <email> <newPassword>` can reset non-Admin account passwords, and `backend/scripts/peek-report.js <trackingReference>` prints a quick database-side view of a case for debugging.
+
+### Reviewer applications
+Applicants select **Apply to become a Reviewer** from the public registration page and submit their name, email, chosen password, a short statement, a CV/resume, and proof of relevant qualification or training. Supporting documents must be valid PDFs no larger than 10 MB each; national ID and police-clearance documents are not requested. The application is not a signed-in account: its credentials remain inaccessible while pending, and the applicant cannot open the Reviewer Queue. An Admin opens both documents in **Manage Users**, confirms they personally checked authenticity and relevance, then approves the applicant to activate Reviewer access or rejects with a recorded reason. The API prevents approval until the same Admin has opened both files and attested to checking them. Uploaded PDFs are deleted from storage after either decision; the Admin identity and time of the review are retained for approved accounts. Rejected applicants may submit a new application with replacement PDFs. Applications are visible in the Admin-only panel, which refreshes periodically; no email notification is configured. Applicants should not upload national ID or police-clearance documents. This local demonstration is not an approved production document-retention or secure hosting service.
 
 ### Install the app
 In a supported browser, open the website and use the browser's **Install app** option (or the in-app install prompt when available). The PWA requires HTTPS outside localhost. Its service worker caches only the public application shell and static assets; API responses, submitted reports, and evidence are not cached. Recording requires camera/microphone permission and HTTPS or localhost. Recordings are limited to 10 minutes or 100 MB and must be attached to a report within two hours.
 
 ### Accessibility
 The interface includes keyboard skip navigation, visible focus styles, semantic landmarks, reduced-motion support, and screen-reader announcements for recording/upload status. Accessibility improvements target WCAG 2.2 AA practices; the project has not undergone a formal conformance audit.
+
+### Why accessibility matters to this project
+Kenya Watch exists to serve every citizen affected by corruption, so the platform is built to be usable regardless of ability: it is fully keyboard-operable with a visible focus indicator, screen-reader compatible (semantic landmarks, labeled controls, live-region announcements for errors and confirmations, text alternatives behind visual charts), zoom-safe for low-vision users, and honors the operating-system reduced-motion preference. For a concise walkthrough of each accessibility feature, see [Docs/Presentation-Guide.md](Docs/Presentation-Guide.md) (Part 9).
 
 ## Running Tests
 
@@ -89,27 +125,50 @@ npm test
 ### Frontend
 ```powershell
 cd frontend
-npm test -- --watchAll=false
+npm test
 ```
 
 ## Maintenance Scripts (backend/scripts/)
-- `bootstrap-admin.js "Name" "email"` — one-time Admin account creation; reads the password from `ADMIN_BOOTSTRAP_PASSWORD`
+- `set-admin-password.js` — hidden prompt to store the Admin bcrypt hash in the ignored backend `.env` and unset any Admin password in MongoDB
+- `bootstrap-admin.js "Name" "email"` — one-time Admin account creation without a database password; requires `ADMIN_PASSWORD_HASH`
 - `anonymize-expired.js [retentionDays=90]` — severs the identity link on long-resolved Path B reports past the retention window (skips cases flagged under legal hold); intended to be run periodically (e.g. via a scheduled task), not automatically
+- `set-password.js <email> <newPassword>` — reset any local account's password (dev convenience)
+- `peek-report.js <trackingReference>` — quick database-side view of a case for debugging
+- `evaluate-classifier.js` — reports the keyword classifier's agreement with human-reviewed category labels on live cases
+
+## Agency Case Workflow
+
+The workflow connects the three actors without granting an agency general access to the reporting database:
+
+1. **Reporter:** A person submits anonymously or through an account and keeps a tracking reference/access key (or uses My Reports). Their name/account link, original narrative, and uploaded evidence are not sent to an agency by the referral workflow.
+2. **Kenya Watch reviewer:** A Reviewer assesses and claims a case. Once an authorised partner relationship and receiving officer are in place, the Reviewer prepares a purpose-limited referral brief and explicitly confirms the recipient and sharing authority. Sending the referral publishes only the brief, category, county/sub-county, Kenya Watch reference, and referral date to that agency's portal accounts. Reviewer liaison notes stay internal. A new agency transfer retains the earlier referral and its updates as history.
+3. **Agency officer:** An individually named account can see only active referrals for its assigned institution. The officer acknowledges a case, moves it through constrained states (under review, information requested, action taken, closed), records an agency file number and internal note, and can propose a reporter-facing update. The officer cannot see the report's identity link, original narrative, evidence, other agencies' cases, or reporter access key.
+4. **Kenya Watch Admin:** The Admin provisions the named officer only after verifying identity and affiliation through an official channel, recording a verification reference. The Admin shares a one-time setup link (expires in 24 hours) over the institution's approved channel and can deactivate the account. Pending reporter messages appear on the Admin overview and must be approved before publication.
+5. **Reporter follow-up:** The report's owner or anonymous reporter can see the agency's current referral status and only Admin-approved messages in their private tracking view. An agency closing its referral does not automatically resolve the Kenya Watch report; a Reviewer separately records the platform's resolution and supporting reference.
+
+### Important deployment boundary
+
+This is an operational, role-scoped workflow **inside Kenya Watch**, not a live connection or partnership with EACC, DCI, or another public institution. Agency names and category mappings are routing suggestions, not official endorsements or jurisdiction decisions. No government identity provider, agency API, email/SMS delivery, formal data-sharing agreement, or secure external transfer protocol is configured. The Admin must not invite real agency staff or send real case data until the institution has formally approved the relationship, legal basis, receiving process, data fields, retention, incident response, and named liaison.
+
+The portal currently uses the project's ordinary password login and session cookie; it has not had an independent security, privacy, or legal compliance audit and is not ready for operational government casework. Before a real deployment, require stronger authentication (including MFA), institutional identity proofing and account lifecycle controls, appropriate encryption/key management, security monitoring, notification and incident processes, retention agreements, and an approved secure hosting/transfer environment. Reviewers must keep referral briefs free of identifying or unnecessary sensitive detail; the UI cannot reliably redact information entered by a human.
 
 ## Project Structure
 ```
 backend/      Express API, MongoDB models, GridFS evidence storage, tests
 frontend/     React single-page app
-agency-portal/  Standalone demo site simulating an external agency's case view (concept prototype only)
+agency-portal/  Role-restricted agency case portal (no external government integration)
 Docs/         Proposal, literature review, methodology, and the full design-decision narrative
 ```
 
 ## Known, Honest Limitations
 - The malware scan on evidence uploads checks for the EICAR test signature only (a real deployment would run a dedicated engine such as ClamAV)
 - Evidence is stored and downloaded byte-for-byte as uploaded. Original photos/documents may contain GPS, device, author, or other identifying metadata; reporters who need anonymity should remove that metadata before upload.
-- Password-reset and status-change emails send over real SMTP to a disposable Ethereal sandbox inbox, not a real mail provider (no production email credentials are available to this project)
-- The Agency Partner Portal is a labelled concept/demo prototype — there is no live integration with any real government institution
-- The current classifier is a keyword-based triage aid, not a trained or validated machine-learning model. The repository contains no approved labeled training dataset, so no model-performance claims should be made or the suggestions used as automated enforcement decisions.
+- Email delivery uses the configured Gmail SMTP account. Set its Google App Password in the ignored `backend/.env` as `SMTP_PASS`; do not commit or share it. A reporter may optionally request an email receipt: the app first emails a six-digit OTP, then sends the Tracking Reference and Access Key only after the code is confirmed. OTPs expire after 10 minutes and allow at most five guesses. Email is optional; the on-screen/downloadable receipt remains available. Actual delivery is not ready until valid Gmail SMTP credentials are configured and tested.
+- The Agency Case Portal is a role-scoped internal workflow; no external government identity provider, agency API, or formal institutional partnership is connected
+- The live category/urgency triage remains a keyword-based aid; its confidence score is not a calibrated probability. A separate supervised model can show an experimental category suggestion to a reviewer only after that reviewer submits an independent assessment. It was trained on synthetic examples, is not validated on real reports, does not change category or urgency, and is not ready for real-world casework or automated decisions.
+- Reviewer related-report suggestions use local TF-IDF/cosine similarity over at most the 500 newest active reports in the same county. The current 12% display threshold is an uncalibrated starting point. The score is lexical similarity, not a probability that reports describe the same incident; wording differences, short reports, shared boilerplate, and language differences can cause misses or false positives. Suggestions are never automatically linked or merged. Larger deployments should benchmark the threshold on reviewer-confirmed pairs and move to an indexed retrieval service if report volume makes the bounded scan slow.
+- ML training and retraining instructions live in [`ml/`](ml/README.md), separately from the keyword-based triage. No dataset has been imported from a third party or exported from the local MongoDB. A future training CSV must contain only approved, adjudicated labels and be stored locally in the ignored `ml/data/approved/` directory.
+- ML label collection is a separate, blinded workflow: two different staff accounts independently label the alleged conduct or mark it insufficient to classify; matching category labels become an agreed candidate, two insufficient assessments produce no category target, and disagreements require an Admin's documented adjudication. Reporter-selected categories and the existing classifier output are hidden from a staff member until they submit their own assessment. The pilot guide is in [`ml/LABELING_GUIDE.md`](ml/LABELING_GUIDE.md). The model suggestion is advisory only; its synthetic benchmark does not establish real-world accuracy, fairness, or operational readiness.
 - Report intake normalizes whitespace and Unicode for structured fields, validates dates and category-specific values, and leaves optional facts blank when they are not provided. It does not impute allegations, dates, identities, or demographics. Training-data cleaning and imputation must be designed against the actual, approved dataset; missing target labels must not be invented, and any feature imputation must be fitted on training data only.
 - Report deletion is an Admin-only soft archive. It hides the report from active views and public statistics while retaining the record and evidence for audit; reports under legal hold cannot be archived.
 - Admins can restore archived reports or permanently delete an archived report and its GridFS file/chunks (permanent deletion is blocked by legal hold). User deletion removes the account and clears that account's identity references from retained reports and audit entries.

@@ -1,0 +1,52 @@
+{
+  "dataset_name": "Kenya Watch synthetic seed corpus",
+  "status": "synthetic_only_not_for_real_world_validation_or_production_training",
+  "generation_method": "Hand-authored fictional scenarios and simple paraphrase prefixes",
+  "rows": 540,
+  "scenario_groups": 135,
+  "scenarios_per_category": {
+    "Bribery": 15,
+    "Embezzlement": 15,
+    "Procurement Fraud": 15,
+    "Abuse of Office": 15,
+    "Nepotism/Favoritism": 15,
+    "Extortion": 15,
+    "Fraud/Forgery of Documents": 15,
+    "Conflict of Interest": 15,
+    "Other": 15
+  },
+  "language_rows": {
+    "English": 270,
+    "Kiswahili": 270
+  },
+  "fictional_county_values_for_audit_only": [
+    "Nairobi",
+    "Mombasa",
+    "Kisumu",
+    "Nakuru",
+    "Turkana",
+    "Garissa",
+    "Kilifi",
+    "Bungoma",
+    "Meru",
+    "Kitui"
+  ],
+  "category_counts": {
+    "Bribery": 60,
+    "Embezzlement": 60,
+    "Procurement Fraud": 60,
+    "Abuse of Office": 60,
+    "Nepotism/Favoritism": 60,
+    "Extortion": 60,
+    "Fraud/Forgery of Documents": 60,
+    "Conflict of Interest": 60,
+    "Other": 60
+  },
+  "limitations": [
+    "Synthetic scenarios and labels are not observations of real Kenyan reports.",
+    "Kiswahili text is a draft and has not been reviewed by a native speaker.",
+    "The simple paraphrase variants are related within incident groups and must remain in the same validation fold.",
+    "Balanced labels, short scenarios, and templatic phrasing do not represent real deployment prevalence or report-writing variation.",
+    "Scores from this data test code and expose synthetic task behavior only; they are not a real-world accuracy estimate."
+  ]
+}

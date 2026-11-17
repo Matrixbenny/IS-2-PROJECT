@@ -9,7 +9,11 @@ async function attachUser(req, res, next) {
     if (!token) return next();
     const payload = verifyToken(token);
     const user = await User.findById(payload.sub).select('-password');
-    if (user && (user.role !== 'admin' || isConfiguredAdminEmail(user.email))) {
+    const validAgencyAccount = user?.role !== 'agency' || (
+      user.agencySlug && user.agencyVerificationReference && user.agencyVerifiedAt
+    );
+    if (user && user.isActive !== false && validAgencyAccount &&
+      (user.role !== 'admin' || isConfiguredAdminEmail(user.email))) {
       req.user = user;
     }
     return next();

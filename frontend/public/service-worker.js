@@ -53,3 +53,39 @@ self.addEventListener('fetch', (event) => {
     );
   }
 });
+
+// Web Push: zero-cost phone alerts. The OS shows this notification even when
+// the Kenya Watch tab is closed, and no SMS airtime or SMS credit is used.
+self.addEventListener('push', (event) => {
+  let payload = {};
+  try {
+    payload = event.data ? event.data.json() : {};
+  } catch (error) {
+    payload = { title: 'Kenya Watch', body: event.data ? event.data.text() : '' };
+  }
+  const title = payload.title || 'Kenya Watch';
+  const options = {
+    body: payload.body || '',
+    icon: '/icons/kenya-watch-192.png',
+    badge: '/icons/kenya-watch-192.png',
+    data: { link: payload.link || '/' },
+    tag: payload.tag || 'kenya-watch-status'
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const link = event.notification.data?.link || '/';
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+      for (const client of clients) {
+        if ('focus' in client) {
+          client.navigate(link);
+          return client.focus();
+        }
+      }
+      return self.clients.openWindow(link);
+    })
+  );
+});

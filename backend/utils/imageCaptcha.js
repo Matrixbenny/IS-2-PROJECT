@@ -71,7 +71,6 @@ const OBJECTS = {
 };
 
 const TARGETS = ["bus", "trafficLight", "bicycle", "cat", "tree", "house"];
-const DECOYS = TARGETS.filter((t) => t !== "bus"); // all non-target types
 
 const TILE_SIZE = 100;
 const PALETTE = ["#fef3c7", "#ecfdf5", "#eff6ff", "#fdf2f8", "#f8fafc"];
@@ -93,7 +92,7 @@ function renderTileSvg(type, seed) {
 // JWT only signs its payload - a client could base64-decode and read plain ids,
 // so encryption is mandatory here to keep the answer key secret from the browser.
 function sealIds(ids) {
-  const key = crypto.createHash('sha256').update(process.env.JWT_SECRET).digest();
+  const key = crypto.createHash('sha256').update(process.env.CAPTCHA_SECRET || process.env.JWT_SECRET).digest();
   const iv = crypto.randomBytes(12);
   const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
   const enc = Buffer.concat([cipher.update(String(ids), 'utf8'), cipher.final()]);
@@ -104,7 +103,7 @@ function sealIds(ids) {
 function openIds(sealed) {
   try {
     const [ivB64, tagB64, dataB64] = String(sealed).split('.');
-    const key = crypto.createHash('sha256').update(process.env.JWT_SECRET).digest();
+    const key = crypto.createHash('sha256').update(process.env.CAPTCHA_SECRET || process.env.JWT_SECRET).digest();
     const decipher = crypto.createDecipheriv('aes-256-gcm', key, Buffer.from(ivB64, 'base64url'));
     decipher.setAuthTag(Buffer.from(tagB64, 'base64url'));
     return Buffer.concat([decipher.update(Buffer.from(dataB64, 'base64url')), decipher.final()]).toString('utf8');
@@ -122,18 +121,25 @@ function shuffle(arr) {
   return a;
 }
 
+function buildCells(target, targetCount, randomIndex = crypto.randomInt) {
+  if (!TARGETS.includes(target) || !Number.isInteger(targetCount) || targetCount < 2 || targetCount > 5) {
+    throw new RangeError("Invalid image challenge target or target count");
+  }
+  const decoys = TARGETS.filter((type) => type !== target);
+  const cells = Array(targetCount).fill(target);
+  while (cells.length < 9) {
+    cells.push(decoys[randomIndex(decoys.length)]);
+  }
+  return cells;
+}
+
 // Generates a 3x3 image challenge. Returns { prompt, token, tiles: [{id, svg}] }.
 // Correct tile ids are AES-256-GCM encrypted inside the signed JWT so the
 // browser can decode the token but still cannot read the answer key.
 function generateImageChallenge() {
   const target = TARGETS[crypto.randomInt(TARGETS.length)];
   const targetCount = crypto.randomInt(2, 6); // 2..5 correct tiles
-  const cells = [];
-  for (let i = 0; i < targetCount; i++) cells.push(target);
-  while (cells.length < 9) {
-    const decoy = DECOYS[crypto.randomInt(DECOYS.length)];
-    cells.push(decoy);
-  }
+  const cells = buildCells(target, targetCount);
   const shuffled = shuffle(cells);
   const tiles = shuffled.map((type, index) => ({
     id: index,
@@ -143,8 +149,8 @@ function generateImageChallenge() {
     .map((type, index) => (type === target ? index : null))
     .filter((v) => v !== null);
   const token = require("jsonwebtoken").sign(
-    { kind: "image", sealed: sealIds(correctIds.join(",")) },
-    process.env.JWT_SECRET,
+    { kind: "image", sealed: sealIds(correctIds.join(",")), jti: crypto.randomUUID() },
+    process.env.CAPTCHA_SECRET || process.env.JWT_SECRET,
     { expiresIn: "10m" },
   );
   return {
@@ -160,7 +166,7 @@ function verifyImageSelection(token, selectedIds) {
   try {
     const payload = require("jsonwebtoken").verify(
       token,
-      process.env.JWT_SECRET,
+      process.env.CAPTCHA_SECRET || process.env.JWT_SECRET,
     );
     if (payload.kind !== "image" || !payload.sealed) return false;
     const expectedStr = openIds(payload.sealed);
@@ -181,4 +187,4 @@ function verifyImageSelection(token, selectedIds) {
   }
 }
 
-module.exports = { generateImageChallenge, verifyImageSelection };
+module.exports = { buildCells, generateImageChallenge, verifyImageSelection };

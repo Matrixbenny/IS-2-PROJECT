@@ -3,46 +3,171 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Agency Partner Portal (Concept Demo)</title>
+<title>Kenya Watch Agency Case Portal</title>
 <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <div class="demo-banner">
-    CONCEPT / DEMO PROTOTYPE - not a real government system. Simulates what an agency (e.g. DCI, EACC) might see
-    if Kenya Watch referred a case to them through a real-world liaison process.
+    PARTNER PORTAL · Access is for individually verified, authorised agency officers. No government system is connected.
   </div>
 
   <header class="ap-header">
     <div class="ap-logo">🏛️</div>
     <div>
-      <h1>Agency Partner Portal</h1>
-      <div class="ap-tagline">Referred corruption cases, for agency follow-up</div>
+      <h1>Agency Case Portal</h1>
+      <div class="ap-tagline">Secure follow-up on cases referred by Kenya Watch</div>
     </div>
   </header>
 
   <main id="login-view" class="ap-card ap-narrow">
-    <h2>Partner Sign-In</h2>
-    <p class="ap-helper">Select your agency and enter the demo access code shared with your liaison.</p>
+    <h2>Agency officer sign-in</h2>
+    <p class="ap-helper">Use the named account provisioned for you by the Kenya Watch Admin team. Access is limited to your assigned institution.</p>
     <form id="login-form">
       <div class="ap-field">
-        <label for="agency-select">Agency</label>
-        <select id="agency-select" required></select>
+        <label for="agency-email">Official email</label>
+        <input id="agency-email" name="email" type="email" autocomplete="username" required />
       </div>
       <div class="ap-field">
-        <label for="access-code">Demo access code</label>
-        <input id="access-code" type="text" placeholder="e.g. EACC-DEMO-2026" required />
+        <label for="agency-password">Password</label>
+        <div class="ap-password-input">
+          <input id="agency-password" name="password" type="password" autocomplete="current-password" required />
+          <button id="agency-password-toggle" class="ap-btn-secondary" type="button" aria-label="Show password" aria-pressed="false" aria-controls="agency-password">Show</button>
+        </div>
       </div>
-      <button type="submit">Sign In</button>
-      <div id="login-error" class="ap-error" hidden></div>
+      <button type="submit">Sign in</button>
+      <div id="login-error" class="ap-error" role="alert" hidden></div>
     </form>
+    <p class="ap-helper ap-switch-hint">
+      New officer at a partner institution?
+      <a href="/agency-portal/#apply" id="show-apply-link">Apply for an agency officer account</a>
+      — an Admin verifies your identity, employment and authority before access is granted.
+    </p>
+  </main>
+
+  <main id="apply-view" class="ap-card ap-narrow" hidden>
+    <h2>Apply for an agency officer account</h2>
+    <p class="ap-helper">
+      For officers of an authorised Kenyan institution (EACC, DCI, National Police Service, ODPP,
+      Judiciary, or a County Government). Kenya Watch grants access only after an Admin confirms —
+      through an official channel with your institution — who you are, that you are employed there,
+      and that you are legally authorised to receive and handle corruption case referrals.
+    </p>
+
+    <form id="apply-form">
+      <fieldset class="ap-fieldset">
+        <legend>1. Who is applying</legend>
+        <div class="ap-field">
+          <label for="apply-name">Full name as it appears on your staff record</label>
+          <input id="apply-name" name="name" required maxlength="120" />
+        </div>
+        <div class="ap-field">
+          <label for="apply-email">Email you will sign in with</label>
+          <input id="apply-email" name="email" type="email" autocomplete="email" required />
+        </div>
+        <div class="ap-field">
+          <label for="apply-official-email">Official work email issued by your institution</label>
+          <input id="apply-official-email" name="officialEmail" type="email" required />
+          <div class="ap-helper">Your institutional address (e.g. @eacc.go.ke, @dci.go.ke, @odpp.go.ke). Used to confirm your affiliation; it may be the same as the email above.</div>
+        </div>
+        <div class="ap-field">
+          <label for="apply-password">Password</label>
+          <div class="ap-password-input">
+            <input id="apply-password" name="password" type="password" autocomplete="new-password" required minlength="8" pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}" title="At least 8 characters with an uppercase letter, a lowercase letter, a number and a special character." />
+            <button id="apply-password-toggle" class="ap-btn-secondary" type="button" aria-label="Show password" aria-pressed="false" aria-controls="apply-password">Show</button>
+          </div>
+          <div class="ap-helper">At least 8 characters with an uppercase letter, a lowercase letter, a number and a special character.</div>
+        </div>
+      </fieldset>
+
+      <fieldset class="ap-fieldset">
+        <legend>2. Your institution</legend>
+        <div class="ap-field">
+          <label for="apply-agency">Institution</label>
+          <select id="apply-agency" name="agencySlug" required>
+            <option value="">Select your institution…</option>
+          </select>
+        </div>
+        <div class="ap-field">
+          <label for="apply-staff-number">Staff / service number</label>
+          <input id="apply-staff-number" name="staffNumber" required minlength="3" maxlength="40" />
+          <div class="ap-helper">Checked against your institution's records during verification.</div>
+        </div>
+        <div class="ap-field">
+          <label for="apply-job-title">Official job title</label>
+          <input id="apply-job-title" name="jobTitle" required minlength="3" maxlength="120" />
+        </div>
+        <div class="ap-field">
+          <label for="apply-duty-station">Duty station / office</label>
+          <input id="apply-duty-station" name="dutyStation" required minlength="3" maxlength="160" />
+        </div>
+      </fieldset>
+
+      <fieldset class="ap-fieldset">
+        <legend>3. Proof of authority (PDF)</legend>
+        <div class="ap-field">
+          <label for="apply-auth-letter">Institutional authorisation letter</label>
+          <input id="apply-auth-letter" name="authorisationLetter" type="file" accept="application/pdf" required />
+          <div class="ap-helper">
+            A letter on your institution's letterhead, signed by your director or authorised signatory,
+            naming you and confirming you may receive and handle corruption case referrals from Kenya Watch. 10 MB maximum.
+          </div>
+        </div>
+        <div class="ap-field">
+          <label for="apply-staff-id">Staff identity document</label>
+          <input id="apply-staff-id" name="staffId" type="file" accept="application/pdf" required />
+          <div class="ap-helper">A scan of your institutional staff ID. 10 MB maximum.</div>
+        </div>
+      </fieldset>
+
+      <fieldset class="ap-fieldset">
+        <legend>4. Your role</legend>
+        <div class="ap-field">
+          <label for="apply-justification">How will you use referred cases?</label>
+          <textarea id="apply-justification" name="justification" rows="4" required minlength="30" maxlength="1200"></textarea>
+          <div class="ap-helper">30–1200 characters. Describe your official role in receiving and following up these cases.</div>
+        </div>
+        <div class="ap-field ap-checkbox-field">
+          <input id="apply-declaration" name="declaration" type="checkbox" required />
+          <label for="apply-declaration">
+            I confirm that I am authorised by my institution to receive and handle referred cases for
+            official purposes only, that the details and documents I have given are true, and that I
+            understand access is logged and can be withdrawn.
+          </label>
+        </div>
+      </fieldset>
+
+      <button type="submit">Submit application for verification</button>
+      <div id="apply-error" class="ap-error" role="alert" hidden></div>
+    </form>
+
+    <div id="apply-success" class="ap-success" hidden>
+      <strong>Application submitted.</strong>
+      <p>
+        A Kenya Watch Admin will verify your identity, employment and authority with your institution.
+        You will be contacted at your official work email once a decision is made. You cannot sign in
+        until the application is approved.
+      </p>
+      <button id="apply-back-btn" class="ap-btn-secondary" type="button">Back to sign in</button>
+    </div>
   </main>
 
   <main id="cases-view" class="ap-card" hidden>
+    <section class="ap-role-separation" aria-label="Agency officer workspace">
+      <strong>Agency Case Officer workspace</strong>
+      <p>
+        This portal is separate from Kenya Watch's internal Reviewer Queue. You can follow up only on referrals sent to your assigned agency, using the referral brief and location details provided. You cannot access the original report narrative, evidence, or reporter identity. Optional messages for reporters are reviewed by a Kenya Watch Admin before sharing.
+      </p>
+    </section>
     <div class="ap-cases-header">
       <h2 id="agency-name-heading">Referred Cases</h2>
-      <button id="logout-btn" class="ap-btn-secondary">Sign out</button>
+      <div class="ap-session-actions">
+        <button id="refresh-cases-btn" class="ap-btn-secondary" type="button">Refresh cases</button>
+        <button id="logout-btn" class="ap-btn-secondary" type="button">Sign out</button>
+      </div>
     </div>
-    <div id="cases-list" class="ap-cases-list"></div>
+    <p id="last-refreshed" class="ap-helper" aria-live="polite"></p>
+    <div id="cases-error" class="ap-error" role="alert" hidden></div>
+    <div id="cases-list" class="ap-cases-list" aria-live="polite"></div>
   </main>
 
   <script src="app.js"></script>

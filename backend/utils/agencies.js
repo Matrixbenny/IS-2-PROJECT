@@ -29,4 +29,8 @@ function suggestAgencyForCategory(category) {
   return match ? match.name : null;
 }
 
-module.exports = { AGENCIES, suggestAgencyForCategory };
+function slugify(name) {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+}
+
+module.exports = { AGENCIES, suggestAgencyForCategory, slugify };

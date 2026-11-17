@@ -5,15 +5,28 @@ const User = require('../user.model');
 const { CATEGORIES, CATEGORY_FIELDS } = require('../utils/categories');
 const { generateTrackingReference, generateAccessKey, hashSecret, verifySecret } = require('../utils/tracking');
 const { classifyReportText } = require('../utils/classifier');
+const { MAX_CANDIDATES, MAX_SUGGESTIONS, suggestRelatedCases } = require('../utils/relatedCaseMatcher');
+const {
+  ModelArtifactError,
+  classifyText,
+  hasIndependentCategoryAssessment
+} = require('../utils/experimentalCategoryModel');
 const { upload } = require('../middleware/upload');
 const { storeEvidenceFile } = require('../utils/evidence');
 const { getBucket, deleteGridFsFile } = require('../utils/gridfs');
 const { requireAuth, requireRole } = require('../middleware/auth');
-const { AGENCIES, suggestAgencyForCategory } = require('../utils/agencies');
-const { sendMail } = require('../utils/mailer');
-const { generateChallenge, verifyChallenge, evaluateBehavior, issueBehaviorToken } = require('../utils/captcha');
+const { AGENCIES, suggestAgencyForCategory, slugify } = require('../utils/agencies');
+const mailer = require('../utils/mailer');
+const { notifyReporterOfStatusChange } = require('../utils/reportStatusNotifications');
+const { SELF_REVIEW_ERROR, isBlockedSelfReview, isOwnReport } = require('../utils/selfReview');
+const { generateChallenge, verifyChallenge } = require('../utils/captcha');
 const { generateImageChallenge, verifyImageSelection } = require('../utils/imageCaptcha');
 const { hashRecordingToken } = require('../utils/recordingToken');
+const {
+  ReceiptEmailError,
+  requestReceiptOtp,
+  verifyReceiptOtp
+} = require('../utils/reportEmailReceipt');
 
 const router = express.Router();
 
@@ -48,7 +61,13 @@ function classifyInBackground(reportId, { title, description, evidenceCount }) {
     try {
       const result = classifyReportText({ title, description, evidenceCount });
       await Report.findByIdAndUpdate(reportId, {
-        classification: { category: result.category, urgency: result.urgency, confidence: result.confidence, classifiedAt: new Date() },
+        classification: {
+          category: result.category,
+          urgency: result.urgency,
+          confidence: result.confidence,
+          classifiedAt: new Date(),
+          lingoTerms: result.lingoTerms || []
+        },
         tags: result.tags
       });
     } catch (err) {
@@ -63,8 +82,31 @@ router.get('/categories', (req, res) => {
 });
 
 // GET /api/reports/agencies - the Agency/Institution referral list (decision #7).
-router.get('/agencies', requireRole('reviewer', 'admin'), (req, res) => {
-  res.json({ agencies: AGENCIES });
+router.get('/agencies', requireRole('reviewer', 'admin'), async (req, res) => {
+  try {
+    const activePartners = await User.distinct('agencySlug', {
+      role: 'agency',
+      isActive: true,
+      agencyInvitationAcceptedAt: { $ne: null }
+    });
+    return res.json({
+      agencies: AGENCIES
+        .filter((agency) => activePartners.includes(slugify(agency.name)))
+        .map((agency) => ({ name: agency.name, slug: slugify(agency.name) }))
+    });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/reports/agency-partners - the public list of partner institutions.
+// An officer applying for an account must pick the institution they work for,
+// and because they are not signed in yet the reviewer/admin /agencies list (which
+// also reveals which agencies have live officers) is not available to them.
+router.get('/agency-partners', (req, res) => {
+  return res.json({
+    agencies: AGENCIES.map((agency) => ({ name: agency.name, slug: slugify(agency.name) }))
+  });
 });
 
 // GET /api/reports/captcha-challenge - self-hosted human-verification challenge (decision #9).
@@ -72,36 +114,10 @@ router.get('/captcha-challenge', (req, res) => {
   res.json(generateChallenge());
 });
 
-// POST /api/reports/captcha-verify - reCAPTCHA-style "I'm not a robot" endpoint.
-// Receives interaction metrics, judges plausibility, and returns a signed
-// human-verification token on success (the submit endpoint then accepts it
-// in place of a text-challenge answer). Falls back to a text challenge when
-// the behavioral check fails, so genuine users are never locked out.
+// GET /api/reports/captcha-image - issues a challenge that must be solved before submission.
 router.get('/captcha-image', (req, res) => {
   const imageChallenge = generateImageChallenge();
   res.json({
-    verified: false,
-    imageMode: true,
-    prompt: imageChallenge.prompt,
-    token: imageChallenge.token,
-    tiles: imageChallenge.tiles
-  });
-});
-
-// POST /api/reports/captcha-verify - reCAPTCHA-style "I'm not a robot" endpoint.
-// Receives interaction metrics, judges plausibility, and returns a signed
-// human-verification token on success (the submit endpoint then accepts it
-// in place of a text-challenge answer). Falls back to an image-selection
-// challenge when the behavioral check fails, so bots never get a free pass.
-router.post('/captcha-verify', (req, res) => {
-  const { timeSpentMs, pointerMoves, keyEvents, honeypot, hasPointer } = req.body || {};
-  if (evaluateBehavior({ timeSpentMs, pointerMoves, keyEvents, honeypot, hasPointer })) {
-    return res.json({ verified: true, token: issueBehaviorToken() });
-  }
-  // Behavioral check failed - escalate to the image-selection challenge
-  // ("select all images with X"), the hardest-to-script option.
-  const imageChallenge = generateImageChallenge();
-  return res.json({
     verified: false,
     imageMode: true,
     prompt: imageChallenge.prompt,
@@ -187,10 +203,17 @@ router.post('/', upload.array('evidence', 10), async (req, res) => {
       }
     }
     if (recordingSession) {
+      // The live recording is kept exactly as recorded: same GridFS id, same
+      // filename (which already carries the real container extension, e.g.
+      // .webm / .ogg / .mp4), same stored bytes. Only the evidence "type"
+      // label (audio/video) is normalised, and even that keeps any unexpected
+      // value instead of failing the whole submission.
       evidence.push({
         gridFsId: recordingSession.fileId,
         filename: recordingSession.filename,
-        type: recordingSession.mediaType
+        type: ['image', 'video', 'audio', 'document'].includes(recordingSession.mediaType)
+          ? recordingSession.mediaType
+          : 'video'
       });
     }
 
@@ -279,6 +302,26 @@ router.post('/', upload.array('evidence', 10), async (req, res) => {
   }
 });
 
+router.post('/email-receipt/request-otp', async (req, res) => {
+  try {
+    return res.json(await requestReceiptOtp(req.body || {}));
+  } catch (error) {
+    if (error instanceof ReceiptEmailError) return res.status(error.status).json({ error: error.message });
+    console.error('[report receipt] verification request failed:', error.message);
+    return res.status(500).json({ error: 'Could not request an email verification code.' });
+  }
+});
+
+router.post('/email-receipt/verify-otp', async (req, res) => {
+  try {
+    return res.json(await verifyReceiptOtp(req.body || {}));
+  } catch (error) {
+    if (error instanceof ReceiptEmailError) return res.status(error.status).json({ error: error.message });
+    console.error('[report receipt] code verification failed:', error.message);
+    return res.status(500).json({ error: 'Could not verify the email code.' });
+  }
+});
+
 // GET /api/reports - public case list, general tier only (decision #3/#21): never exposes identity.
 router.get('/', async (req, res) => {
   try {
@@ -299,8 +342,56 @@ router.get('/mine', requireAuth, async (req, res) => {
   }
 });
 
-function withSuggestedAgency(report) {
-  return { ...report.toReviewerTier(), suggestedAgency: suggestAgencyForCategory(report.reportedCategory) };
+// POST /api/reports/:id/comments - Path B owner adds follow-up info to their own
+// report. Comments are additive and reviewer-visible; identity stays sealed because
+// toReviewerTier()/toDeepTier() never expose the user field alongside comments.
+router.post('/:id/comments', requireAuth, async (req, res) => {
+  try {
+    const { text } = req.body;
+    if (typeof text !== 'string' || text.trim().length < 2) {
+      return res.status(400).json({ error: 'Write a short message (at least 2 characters)' });
+    }
+    const report = await Report.findOne({ _id: req.params.id, user: req.user._id, archivedAt: null });
+    if (!report) return res.status(404).json({ error: 'Report not found among your submissions' });
+    const comment = { author: req.user._id, text: text.trim().slice(0, 2000), createdAt: new Date() };
+    report.comments.push(comment);
+    await report.save();
+    return res.status(201).json({ message: 'Additional information added to your report', comments: report.toDeepTier().comments });
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
+  }
+});
+
+function withSuggestedAgency(report, user) {
+  const result = report.toReviewerTier();
+  const annotations = report.categoryReview?.annotations || [];
+  const ownAnnotation = user && annotations.find((item) => item.reviewer.toString() === user._id.toString());
+  const isAdjudicator = user
+    && report.categoryReview?.adjudicatedBy?.toString() === user._id.toString();
+  const canViewFinalLabel = Boolean(ownAnnotation || isAdjudicator);
+  const isBlinded = !canViewFinalLabel;
+  result.categoryReview = {
+    status: report.categoryReview?.status || 'awaiting_second_review',
+    annotationCount: annotations.length,
+    ownAnnotationSubmitted: Boolean(ownAnnotation),
+    ownDecision: ownAnnotation?.decision || (ownAnnotation?.category ? 'category' : null),
+    ownCategory: ownAnnotation?.category || null,
+    adjudicatedDecision: canViewFinalLabel
+      ? report.categoryReview?.adjudicatedDecision || (report.categoryReview?.adjudicatedCategory ? 'category' : null)
+      : null,
+    adjudicatedCategory: canViewFinalLabel
+      ? report.categoryReview?.adjudicatedCategory || null
+      : null
+  };
+  if (isBlinded) {
+    delete result.reportedCategory;
+    delete result.categorySpecificDetails;
+    result.classification = null;
+    result.tags = [];
+    return result;
+  }
+  result.suggestedAgency = suggestAgencyForCategory(report.reportedCategory);
+  return result;
 }
 
 function findActiveReport(id) {
@@ -308,19 +399,256 @@ function findActiveReport(id) {
 }
 
 // GET /api/reports/queue - Reviewer/Admin shared triage queue, reviewer tier (decision #24/#25).
+// Sorted so the most urgent unclaimed work rises to the top: urgency rank, then
+// classification age (oldest first), then submission age - the same logic the
+// escalation monitor uses, so the queue and the escalation page agree.
 router.get('/queue', requireRole('reviewer', 'admin'), async (req, res) => {
   try {
-    const reports = await Report.find({ archivedAt: null }).sort({ createdAt: -1 }).limit(200);
-    return res.json(reports.map(withSuggestedAgency));
+    const reports = await Report.find({ archivedAt: null }).limit(200);
+    const urgencyRank = { Critical: 3, High: 2, Medium: 1, Low: 0 };
+    const sorted = reports.sort((a, b) => {
+      const ra = urgencyRank[a.classification?.urgency] ?? 0;
+      const rb = urgencyRank[b.classification?.urgency] ?? 0;
+      if (ra !== rb) return rb - ra;
+      const ca = a.classification?.classifiedAt || a.createdAt;
+      const cb = b.classification?.classifiedAt || b.createdAt;
+      return new Date(ca) - new Date(cb);
+    });
+    // A reviewer who is also a reporter must see that a case is their own, and
+    // must not be offered the review controls for it (decision #36).
+    const ownFlags = req.user.role === 'reviewer'
+      ? await Promise.all(sorted.map((report) => isOwnReport(report, req.user)))
+      : [];
+    return res.json(sorted.map((report, index) => ({
+      ...withSuggestedAgency(report, req.user),
+      isOwnReport: Boolean(ownFlags[index]),
+      // Lets the queue show "claim" vs "yours" vs "taken" without exposing
+      // who holds a case, only that it is held.
+      claimedByMe: Boolean(report.claimedBy && report.claimedBy.toString() === req.user._id.toString()),
+      claimedByOther: Boolean(report.claimedBy && report.claimedBy.toString() !== req.user._id.toString())
+    })));
   } catch (err) {
     return res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/reports/my-claimed - the cases THIS reviewer has claimed, so they have
+// a personal worklist instead of hunting through the shared queue.
+router.get('/my-claimed', requireRole('reviewer', 'admin'), async (req, res) => {
+  try {
+    const filters = { archivedAt: null, claimedBy: req.user._id };
+    // The reviewer workspace defaults to live work; closed cases stay reachable
+    // through ?includeClosed=true so nothing disappears from their history.
+    if (req.query.includeClosed !== 'true') filters.status = { $in: ['Received', 'In Review'] };
+
+    const reports = await Report.find(filters).sort({ claimedAt: -1, createdAt: -1 }).limit(200);
+    return res.json(reports.map((report) => ({
+      ...withSuggestedAgency(report, req.user),
+      isOwnReport: false
+    })));
+  } catch (err) {
+    console.error('[reviewer] could not load claimed cases:', err.message);
+    return res.status(500).json({ error: 'Could not load your claimed cases' });
+  }
+});
+
+// Experimental model suggestions are available only after this reviewer records their own category.
+router.get('/:id/ml-category-suggestion', requireRole('reviewer', 'admin'), async (req, res) => {
+  if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+    return res.status(400).json({ error: 'Invalid report id' });
+  }
+  try {
+    const report = await findActiveReport(req.params.id);
+    if (!report) return res.status(404).json({ error: 'Report not found' });
+    if (!hasIndependentCategoryAssessment(report.categoryReview, req.user._id)) {
+      return res.status(409).json({ error: 'Submit your independent category assessment before viewing a model suggestion.' });
+    }
+
+    return res.json({
+      ...classifyText({ title: report.title, description: report.description }),
+      realWorldPerformanceClaim: false,
+      advisoryOnly: true
+    });
+  } catch (error) {
+    if (error instanceof ModelArtifactError) return res.status(503).json({ error: error.message });
+    return res.status(500).json({ error: 'Could not generate the experimental category suggestion.' });
+  }
+});
+
+// Independent reviewer labels are collected separately from the reporter's selected category.
+router.get('/:id/category-review', requireRole('reviewer', 'admin'), async (req, res) => {
+  try {
+    const report = await findActiveReport(req.params.id);
+    if (!report) return res.status(404).json({ error: 'Report not found' });
+    if (await isBlockedSelfReview(report, req.user)) {
+      return res.status(403).json({ error: SELF_REVIEW_ERROR });
+    }
+    const review = report.categoryReview;
+    const ownAnnotation = review.annotations.find((item) => item.reviewer.toString() === req.user._id.toString());
+    const isAdjudicator = review.adjudicatedBy?.toString() === req.user._id.toString();
+    const canViewFinalLabel = Boolean(ownAnnotation || isAdjudicator);
+    const result = {
+      status: review.status,
+      annotationCount: review.annotations.length,
+      ownAnnotationSubmitted: Boolean(ownAnnotation),
+      ownDecision: ownAnnotation?.decision || (ownAnnotation?.category ? 'category' : null),
+      ownCategory: ownAnnotation?.category || null,
+      adjudicatedDecision: canViewFinalLabel
+        ? review.adjudicatedDecision || (review.adjudicatedCategory ? 'category' : null)
+        : null,
+      adjudicatedCategory: canViewFinalLabel
+        ? review.adjudicatedCategory
+        : null
+    };
+    if (req.user.role === 'admin' && review.status === 'needs_adjudication') {
+      result.proposedAnnotations = review.annotations.map((item) => ({
+        decision: item.decision || (item.category ? 'category' : 'insufficient_information'),
+        category: item.category,
+        note: item.note,
+        createdAt: item.createdAt
+      }));
+    }
+    return res.json(result);
+  } catch (err) {
+    return res.status(400).json({ error: 'Invalid report id' });
+  }
+});
+
+router.post('/:id/category-review/annotations', requireRole('reviewer', 'admin'), async (req, res) => {
+  try {
+    const { category, note } = req.body || {};
+    const decision = req.body?.decision || (CATEGORIES.includes(category) ? 'category' : null);
+    if (!['category', 'insufficient_information'].includes(decision)) {
+      return res.status(400).json({ error: 'Select a category or mark the report insufficient for classification' });
+    }
+    if (decision === 'category' && !CATEGORIES.includes(category)) {
+      return res.status(400).json({ error: 'Select a valid report category' });
+    }
+    if (decision === 'insufficient_information' && category !== undefined && category !== null && category !== '') {
+      return res.status(400).json({ error: 'Do not include a category when marking a report insufficient for classification' });
+    }
+    if (note !== undefined && typeof note !== 'string') return res.status(400).json({ error: 'Annotation note must be text' });
+    const cleanNote = note ? cleanText(note, 'Annotation note', 1000, false) : null;
+    if (decision === 'insufficient_information' && !cleanNote) {
+      return res.status(400).json({ error: 'Briefly explain why the report cannot be classified from the available information' });
+    }
+    const selfReport = await findActiveReport(req.params.id);
+    if (!selfReport) return res.status(404).json({ error: 'Report not found' });
+    if (await isBlockedSelfReview(selfReport, req.user)) {
+      return res.status(403).json({ error: SELF_REVIEW_ERROR });
+    }
+    const result = await Report.updateOne(
+      {
+        _id: req.params.id,
+        archivedAt: null,
+        'categoryReview.status': 'awaiting_second_review',
+        'categoryReview.annotations.reviewer': { $ne: req.user._id },
+        'categoryReview.annotations.1': { $exists: false }
+      },
+      {
+        $push: {
+          'categoryReview.annotations': {
+            reviewer: req.user._id,
+            decision,
+            category: decision === 'category' ? category : null,
+            note: cleanNote,
+            createdAt: new Date()
+          }
+        }
+      }
+    );
+    if (!result.matchedCount) {
+      const report = await findActiveReport(req.params.id);
+      if (!report) return res.status(404).json({ error: 'Report not found' });
+      if (report.categoryReview.annotations.some((item) => item.reviewer.toString() === req.user._id.toString())) {
+        return res.status(409).json({ error: 'You have already submitted an independent label for this report' });
+      }
+      return res.status(409).json({ error: 'This report is no longer accepting independent category labels' });
+    }
+
+    const report = await Report.findById(req.params.id);
+    if (report.categoryReview.annotations.length === 2) {
+      const [first, second] = report.categoryReview.annotations;
+      if (
+        first.decision === 'insufficient_information'
+        && second.decision === 'insufficient_information'
+      ) {
+        report.categoryReview.status = 'insufficient_information';
+        report.categoryReview.adjudicatedDecision = 'insufficient_information';
+        report.categoryReview.adjudicatedCategory = null;
+        report.categoryReview.adjudicatedAt = new Date();
+      } else if (
+        first.decision === 'category'
+        && second.decision === 'category'
+        && first.category === second.category
+      ) {
+        report.categoryReview.status = 'agreed';
+        report.categoryReview.adjudicatedDecision = 'category';
+        report.categoryReview.adjudicatedCategory = first.category;
+        report.categoryReview.adjudicatedAt = new Date();
+      } else {
+        report.categoryReview.status = 'needs_adjudication';
+      }
+      await report.save();
+    }
+    return res.status(201).json({
+      status: report.categoryReview.status,
+      annotationCount: report.categoryReview.annotations.length,
+      ownAnnotationSubmitted: true,
+      ownDecision: decision,
+      ownCategory: decision === 'category' ? category : null,
+      adjudicatedDecision: report.categoryReview.adjudicatedDecision,
+      adjudicatedCategory: report.categoryReview.adjudicatedCategory
+    });
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
+  }
+});
+
+router.patch('/:id/category-review/adjudication', requireRole('admin'), async (req, res) => {
+  try {
+    const { category, note } = req.body || {};
+    const decision = req.body?.decision || (CATEGORIES.includes(category) ? 'category' : null);
+    if (!['category', 'insufficient_information'].includes(decision)) {
+      return res.status(400).json({ error: 'Select a category or mark the report insufficient for classification' });
+    }
+    if (decision === 'category' && !CATEGORIES.includes(category)) {
+      return res.status(400).json({ error: 'Select a valid report category' });
+    }
+    if (decision === 'insufficient_information' && category !== undefined && category !== null && category !== '') {
+      return res.status(400).json({ error: 'Do not include a category when adjudicating as insufficient for classification' });
+    }
+    if (typeof note !== 'string') return res.status(400).json({ error: 'Explain the adjudication decision' });
+    const cleanNote = cleanText(note, 'Adjudication note', 1000, false);
+    if (!cleanNote) return res.status(400).json({ error: 'Explain the adjudication decision' });
+
+    const report = await Report.findOne({ _id: req.params.id, archivedAt: null });
+    if (!report) return res.status(404).json({ error: 'Report not found' });
+    if (report.categoryReview.status !== 'needs_adjudication' || report.categoryReview.annotations.length < 2) {
+      return res.status(409).json({ error: 'Only independently reviewed disagreements can be adjudicated' });
+    }
+    report.categoryReview.status = 'adjudicated';
+    report.categoryReview.adjudicatedDecision = decision;
+    report.categoryReview.adjudicatedCategory = decision === 'category' ? category : null;
+    report.categoryReview.adjudicatedBy = req.user._id;
+    report.categoryReview.adjudicatedAt = new Date();
+    report.categoryReview.adjudicationNote = cleanNote;
+    await report.save();
+    return res.json({
+      status: report.categoryReview.status,
+      adjudicatedDecision: report.categoryReview.adjudicatedDecision,
+      adjudicatedCategory: report.categoryReview.adjudicatedCategory,
+      adjudicatedAt: report.categoryReview.adjudicatedAt
+    });
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
   }
 });
 
 router.get('/archived', requireRole('admin'), async (req, res) => {
   try {
     const reports = await Report.find({ archivedAt: { $ne: null } }).sort({ archivedAt: -1 }).limit(200);
-    return res.json(reports.map(withSuggestedAgency));
+    return res.json(reports.map((report) => withSuggestedAgency(report, req.user)));
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
@@ -342,7 +670,7 @@ router.get('/escalations', requireRole('admin'), async (req, res) => {
     return res.json({
       thresholdMinutes: ESCALATION_THRESHOLD_MINUTES,
       cases: reports.map((r) => ({
-        ...withSuggestedAgency(r),
+        ...withSuggestedAgency(r, req.user),
         minutesSinceClassified: Math.round((Date.now() - r.classification.classifiedAt.getTime()) / 60000)
       }))
     });
@@ -361,7 +689,18 @@ router.get('/admin-overview', requireRole('admin'), async (req, res) => {
       'classification.urgency': { $in: ['High', 'Critical'] },
       'classification.classifiedAt': { $lte: cutoff }
     };
-    const [activeReports, archivedReports, statuses, roles, escalations, attention] = await Promise.all([
+    const [
+      activeReports,
+      archivedReports,
+      statuses,
+      roles,
+      escalations,
+      attention,
+      agencyReferrals,
+      recentAgencyReferrals,
+      pendingAgencyMessageCount,
+      pendingAgencyMessages
+    ] = await Promise.all([
       Report.countDocuments({ archivedAt: null }),
       Report.countDocuments({ archivedAt: { $ne: null } }),
       Report.aggregate([
@@ -408,6 +747,91 @@ router.get('/admin-overview', requireRole('admin'), async (req, res) => {
             'classification.urgency': 1
           }
         }
+      ]),
+      Report.aggregate([
+        {
+          $match: {
+            archivedAt: null,
+            'agencyReferral.agency': { $type: 'string', $ne: '' }
+          }
+        },
+        {
+          $addFields: {
+            currentAgencyUpdates: { $ifNull: ['$agencyReferral.agencyUpdates', []] }
+          }
+        },
+        {
+          $group: {
+            _id: '$agencyReferral.agency',
+            reports: { $sum: 1 },
+            updates: { $sum: { $size: '$currentAgencyUpdates' } }
+          }
+        },
+        { $sort: { reports: -1, _id: 1 } }
+      ]),
+      Report.aggregate([
+        {
+          $match: {
+            archivedAt: null,
+            'agencyReferral.agency': { $type: 'string', $ne: '' }
+          }
+        },
+        {
+          $addFields: {
+            dashboardReferralAt: { $ifNull: ['$agencyReferral.referredAt', '$createdAt'] }
+          }
+        },
+        { $sort: { dashboardReferralAt: -1 } },
+        { $limit: 5 },
+        {
+          $project: {
+            _id: 1,
+            trackingReference: 1,
+            title: 1,
+            status: 1,
+            county: 1,
+            subCounty: 1,
+            agency: '$agencyReferral.agency',
+            referralStatus: '$agencyReferral.status',
+            referenceNumber: '$agencyReferral.referenceNumber',
+            referredAt: '$dashboardReferralAt',
+            agencyUpdateCount: { $size: { $ifNull: ['$agencyReferral.agencyUpdates', []] } }
+          }
+        }
+      ]),
+      Report.aggregate([
+        { $match: { archivedAt: null } },
+        { $unwind: '$agencyReferral.agencyUpdates' },
+        {
+          $match: {
+            'agencyReferral.agencyUpdates.publicMessageStatus': 'pending',
+            'agencyReferral.agencyUpdates.publicMessage': { $type: 'string', $ne: '' }
+          }
+        },
+        { $count: 'count' }
+      ]),
+      Report.aggregate([
+        { $match: { archivedAt: null } },
+        { $unwind: '$agencyReferral.agencyUpdates' },
+        {
+          $match: {
+            'agencyReferral.agencyUpdates.publicMessageStatus': 'pending',
+            'agencyReferral.agencyUpdates.publicMessage': { $type: 'string', $ne: '' }
+          }
+        },
+        { $sort: { 'agencyReferral.agencyUpdates.createdAt': 1 } },
+        { $limit: 10 },
+        {
+          $project: {
+            _id: 0,
+            reportId: '$_id',
+            trackingReference: 1,
+            agency: '$agencyReferral.agency',
+            updateId: '$agencyReferral.agencyUpdates._id',
+            message: '$agencyReferral.agencyUpdates.publicMessage',
+            createdAt: '$agencyReferral.agencyUpdates.createdAt'
+          }
+        }
       ])
     ]);
 
@@ -429,13 +853,22 @@ router.get('/admin-overview', requireRole('admin'), async (req, res) => {
         total: Object.values(roleCounts).reduce((total, count) => total + count, 0),
         admins: roleCounts.admin || 0,
         reviewers: roleCounts.reviewer || 0,
-        users: roleCounts.user || 0
+        users: roleCounts.user || 0,
+        agencyOfficers: roleCounts.agency || 0
       },
       escalations: {
         count: escalations,
         thresholdMinutes: ESCALATION_THRESHOLD_MINUTES
       },
-      attention
+      attention,
+      agencyReferrals: {
+        total: agencyReferrals.reduce((sum, item) => sum + item.reports, 0),
+        updates: agencyReferrals.reduce((sum, item) => sum + item.updates, 0),
+        byAgency: agencyReferrals,
+        recent: recentAgencyReferrals,
+        pendingReporterMessages: pendingAgencyMessageCount[0]?.count || 0,
+        messagesForReview: pendingAgencyMessages
+      }
     });
   } catch (err) {
     return res.status(500).json({ error: err.message });
@@ -468,7 +901,13 @@ router.get('/:id', async (req, res) => {
 
     const isOwner = req.user && report.user && report.user.toString() === req.user._id.toString();
     const isStaff = req.user && ['reviewer', 'admin'].includes(req.user.role);
-    if (isStaff) return res.json(withSuggestedAgency(report));
+    if (req.user?.role === 'reviewer') {
+      return res.json({
+        ...withSuggestedAgency(report, req.user),
+        isOwnReport: await isOwnReport(report, req.user)
+      });
+    }
+    if (isStaff) return res.json(withSuggestedAgency(report, req.user));
     if (isOwner) return res.json(report.toDeepTier());
     return res.json(report.toGeneralTier());
   } catch (err) {
@@ -481,12 +920,43 @@ router.post('/:id/claim', requireRole('reviewer', 'admin'), async (req, res) => 
   try {
     const report = await findActiveReport(req.params.id);
     if (!report) return res.status(404).json({ error: 'Report not found' });
+    if (await isBlockedSelfReview(report, req.user)) {
+      return res.status(403).json({ error: SELF_REVIEW_ERROR });
+    }
     if (report.claimedBy && report.claimedBy.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
       return res.status(409).json({ error: 'This case is already claimed by another reviewer' });
     }
+    const alreadyClaimedByMe = report.claimedBy
+      && report.claimedBy.toString() === req.user._id.toString();
     report.claimedBy = req.user._id;
+    report.claimedAt = new Date();
+
+    // Claiming is the citizen's first sign that a human is on the case, so it
+    // moves the report into review and records it in the history the reporter
+    // can see when tracking. Only the first claim does this - re-claiming (or
+    // an Admin picking up a case already in review) must not add a duplicate
+    // entry or drag a Resolved/Rejected case backwards.
+    const firstClaim = !alreadyClaimedByMe;
+    if (firstClaim && report.status === 'Received') {
+      report.status = 'In Review';
+      report.statusHistory.push({
+        status: 'In Review',
+        changedAt: new Date(),
+        changedBy: req.user._id,
+        note: 'Claimed by a Kenya Watch reviewer and now under review.'
+      });
+    }
     await report.save();
-    return res.json(withSuggestedAgency(report));
+
+    if (firstClaim && report.status === 'In Review') {
+      notifyReporterOfStatusChange(report, {
+        status: 'In Review',
+        resolutionNote: null,
+        resolutionReference: null,
+        rejectionReason: null
+      });
+    }
+    return res.json(withSuggestedAgency(report, req.user));
   } catch (err) {
     return res.status(400).json({ error: err.message });
   }
@@ -495,56 +965,224 @@ router.post('/:id/claim', requireRole('reviewer', 'admin'), async (req, res) => 
 // POST /api/reports/:id/refer - Reviewer/Admin refers a case to an Agency/Institution (decision #7).
 router.post('/:id/refer', requireRole('reviewer', 'admin'), async (req, res) => {
   try {
-    const { agency, referenceNumber, notes } = req.body;
+    const {
+      agency, referenceNumber, notes, referralSummary, transferConfirmed,
+      // Case file packet. The reviewer explicitly selects what the receiving
+      // agency may investigate. Defaults are all OFF so nothing sensitive is
+      // shared by accident.
+      releaseNarrative, releaseCategoryDetails, releaseEvidenceIds, releaseReporterContact
+    } = req.body;
+    const selfCheck = await findActiveReport(req.params.id);
+    if (!selfCheck) return res.status(404).json({ error: 'Report not found' });
+    if (await isBlockedSelfReview(selfCheck, req.user)) {
+      return res.status(403).json({ error: SELF_REVIEW_ERROR });
+    }
     if (!agency) return res.status(400).json({ error: 'An agency is required' });
+    const agencyInfo = AGENCIES.find((item) => item.name === agency);
+    if (!agencyInfo) return res.status(400).json({ error: 'Select an agency from the approved list' });
+    if (transferConfirmed !== true) {
+      return res.status(400).json({ error: 'Confirm the authorised recipient and that only necessary information is being shared' });
+    }
+    if (typeof referralSummary !== 'string') return res.status(400).json({ error: 'A referral brief is required' });
+    const cleanSummary = cleanText(referralSummary, 'Referral brief', 5000, false);
+    if (cleanSummary.length < 40) return res.status(400).json({ error: 'The referral brief must be at least 40 characters' });
+    if (referenceNumber !== undefined && typeof referenceNumber !== 'string') {
+      return res.status(400).json({ error: 'Agency reference number must be text' });
+    }
+    if (notes !== undefined && typeof notes !== 'string') {
+      return res.status(400).json({ error: 'Referral notes must be text' });
+    }
+    const cleanReference = referenceNumber ? cleanText(referenceNumber, 'Agency reference number', 120) : null;
+    const cleanNotes = notes ? cleanText(notes, 'Referral notes', 2000, false) : null;
+    const agencyAccountExists = await User.exists({
+      role: 'agency',
+      agencySlug: slugify(agency),
+      isActive: true,
+      agencyInvitationAcceptedAt: { $ne: null }
+    });
+    if (!agencyAccountExists) {
+      return res.status(409).json({ error: 'This agency has no active, verified portal account. Complete partner onboarding before referral.' });
+    }
 
     const report = await findActiveReport(req.params.id);
     if (!report) return res.status(404).json({ error: 'Report not found' });
 
-    report.agencyReferral = { agency, referenceNumber: referenceNumber || null, notes: notes || null };
+    const currentReferral = report.agencyReferral;
+    const sameAgency = currentReferral?.agency === agency;
+    const completingLegacyReferral = sameAgency && !currentReferral.referralSummary;
+    if (sameAgency && !completingLegacyReferral) {
+      return res.status(409).json({ error: 'This case is already referred to that agency. Transfer it only if the receiving agency has changed.' });
+    }
+    const previousReferrals = currentReferral?.previousReferrals || [];
+    if (currentReferral?.agency && (!sameAgency || completingLegacyReferral)) {
+      for (const update of currentReferral.agencyUpdates || []) {
+        if (update.publicMessageStatus === 'pending') {
+          update.publicMessageStatus = 'superseded';
+          update.reviewedAt = new Date();
+        }
+      }
+      previousReferrals.push({
+        agency: currentReferral.agency,
+        referralSummary: currentReferral.referralSummary,
+        referenceNumber: currentReferral.referenceNumber,
+        notes: currentReferral.notes,
+        status: currentReferral.status,
+        referredAt: currentReferral.referredAt,
+        sentBy: currentReferral.sentBy,
+        sentByName: currentReferral.sentByName,
+        endedAt: new Date(),
+        agencyUpdates: currentReferral.agencyUpdates || []
+      });
+    }
+    // Build the released case file. Only evidence that actually belongs to this
+    // report can be released, so a crafted request cannot expose another case's
+    // files. Reporter contact is only shared when explicitly ticked - the
+    // reporter's own consent choice is respected below.
+    const evidenceIds = Array.isArray(releaseEvidenceIds) ? releaseEvidenceIds.map(String) : [];
+    const releasedEvidence = report.evidence
+      .filter((item) => evidenceIds.includes(item._id.toString()))
+      .map((item) => ({
+        evidenceId: item._id,
+        filename: item.filename,
+        type: item.type,
+        releasedAt: new Date()
+      }));
+    if (evidenceIds.length !== releasedEvidence.length) {
+      return res.status(400).json({ error: 'One or more selected evidence files do not belong to this report.' });
+    }
+    // Kenya Watch never holds a reporter's identity for anonymous reports, so
+    // there is nothing to hand over. Contact details can only be released for a
+    // registered reporter who has explicitly opted in to being contacted about
+    // their case - otherwise the flag is recorded as requested but the agency is
+    // told to work through the Kenya Watch liaison.
+    const reporterAccount = report.user ? await User.findById(report.user).select('emailNotificationsOptIn').lean() : null;
+    const reporterAllowsContact = Boolean(reporterAccount && reporterAccount.emailNotificationsOptIn);
+    const releaseContact = releaseReporterContact === true && reporterAllowsContact;
+
+    report.agencyReferral = {
+      agency,
+      referralSummary: cleanSummary,
+      referenceNumber: cleanReference || (completingLegacyReferral ? currentReferral.referenceNumber : null),
+      notes: cleanNotes || (completingLegacyReferral ? currentReferral.notes : null),
+      status: 'sent',
+      referredAt: new Date(),
+      sentBy: req.user._id,
+      sentByName: req.user.name,
+      previousReferrals,
+      agencyUpdates: [],
+      caseFile: {
+        narrative: releaseNarrative === true ? report.description : null,
+        categoryDetails: releaseCategoryDetails === true ? report.categorySpecificDetails : null,
+        reporterContact: releaseContact,
+        evidence: releasedEvidence,
+        releasedAt: new Date(),
+        releasedBy: req.user._id,
+        releasedByName: req.user.name,
+        lastUpdatedAt: new Date()
+      },
+      accessLog: [],
+      informationRequests: []
+    };
     await report.save();
-    return res.json(withSuggestedAgency(report));
+    return res.json(withSuggestedAgency(report, req.user));
   } catch (err) {
     return res.status(400).json({ error: err.message });
+  }
+});
+
+// GET /api/reports/:id/information-requests - open questions from the receiving
+// agency, shown in the reviewer workspace so they can be answered.
+router.get('/:id/information-requests', requireRole('reviewer', 'admin'), async (req, res) => {
+  try {
+    const report = await findActiveReport(req.params.id);
+    if (!report) return res.status(404).json({ error: 'Report not found' });
+    return res.json({
+      agency: report.agencyReferral?.agency || null,
+      requests: (report.agencyReferral?.informationRequests || []).map((item) => ({
+        _id: item._id,
+        question: item.question,
+        status: item.status,
+        requestedAt: item.requestedAt,
+        requestedByEmail: item.requestedByEmail,
+        answer: item.answer,
+        answeredAt: item.answeredAt,
+        answeredByEmail: item.answeredByEmail
+      }))
+    });
+  } catch (err) {
+    return res.status(500).json({ error: 'Could not load information requests' });
+  }
+});
+
+// POST /api/reports/:id/information-requests/:requestId/answer - the reviewer's
+// reply. It goes back to the agency's portal only; it is never shown publicly.
+router.post('/:id/information-requests/:requestId/answer', requireRole('reviewer', 'admin'), async (req, res) => {
+  try {
+    const { answer } = req.body || {};
+    if (typeof answer !== 'string' || answer.trim().length < 5) {
+      return res.status(400).json({ error: 'Write an answer of at least 5 characters' });
+    }
+    if (answer.trim().length > 5000) {
+      return res.status(400).json({ error: 'Keep the answer to 5000 characters or fewer' });
+    }
+    const report = await findActiveReport(req.params.id);
+    if (!report) return res.status(404).json({ error: 'Report not found' });
+
+    const request = (report.agencyReferral?.informationRequests || [])
+      .find((item) => item._id.toString() === req.params.requestId);
+    if (!request) return res.status(404).json({ error: 'Information request not found' });
+    request.answer = answer.trim();
+    request.status = 'answered';
+    request.answeredBy = req.user._id;
+    request.answeredByEmail = req.user.email;
+    request.answeredAt = new Date();
+    await report.save();
+    return res.json({ message: 'Answer sent back to the requesting agency' });
+  } catch (err) {
+    console.error('[reviewer] information request answer failed:', err.message);
+    return res.status(500).json({ error: 'Could not save the answer' });
   }
 });
 
 // PATCH /api/reports/:id/status - Reviewer/Admin status update; Resolved requires a note+reference (decision #6).
 router.patch('/:id/status', requireRole('reviewer', 'admin'), async (req, res) => {
   try {
-    const { status, resolutionNote, resolutionReference } = req.body;
+    const { status, resolutionNote, resolutionReference, rejectionReason } = req.body;
     const validStatuses = ['Received', 'In Review', 'Resolved', 'Rejected'];
     if (!validStatuses.includes(status)) return res.status(400).json({ error: 'Invalid status' });
     if (status === 'Resolved' && (!resolutionNote || !resolutionReference)) {
       return res.status(400).json({ error: 'Resolving a case requires both a resolution note and a reference' });
     }
+    if (status === 'Rejected' && (!rejectionReason || String(rejectionReason).trim().length < 10)) {
+      return res.status(400).json({ error: 'Rejecting a case requires a plain-language reason (at least 10 characters) so the reporter is never left guessing' });
+    }
 
     const report = await findActiveReport(req.params.id);
     if (!report) return res.status(404).json({ error: 'Report not found' });
+    if (await isBlockedSelfReview(report, req.user)) {
+      return res.status(403).json({ error: SELF_REVIEW_ERROR });
+    }
 
     report.status = status;
     if (status === 'Resolved') {
-      report.resolutionNote = resolutionNote;
-      report.resolutionReference = resolutionReference;
+      report.resolutionNote = cleanText(resolutionNote, 'Resolution note', 2000, false);
+      report.resolutionReference = cleanText(resolutionReference, 'Resolution reference', 200, false);
+      report.rejectionReason = null;
+    }
+    if (status === 'Rejected') {
+      report.rejectionReason = cleanText(rejectionReason, 'Rejection reason', 1000, false);
+    }
+    if (status !== 'Resolved' && status !== 'Rejected') {
+      report.rejectionReason = null;
     }
     report.statusHistory.push({ status, changedAt: new Date(), changedBy: req.user._id });
     await report.save();
 
-    // Path B opted-in notification (decision #23) - Path A never gets proactive contact, by design.
-    if (report.user) {
-      User.findById(report.user).then((owner) => {
-        if (owner && owner.emailNotificationsOptIn) {
-          sendMail({
-            to: owner.email,
-            subject: `Your Kenya Watch report ${report.trackingReference} is now "${status}"`,
-            text: `Your report "${report.title}" (${report.trackingReference}) status changed to: ${status}.` +
-              (status === 'Resolved' ? ` Resolution: ${resolutionNote}` : '')
-          }).catch((err) => console.error('[status email] send failed:', err.message));
-        }
-      }).catch(() => {});
-    }
+    // Path B opted-in notification (decision #23) - Path A never gets proactive
+    // contact, by design. Fire-and-forget: a failed email never fails the update.
+    notifyReporterOfStatusChange(report, { status, resolutionNote, resolutionReference, rejectionReason });
 
-    return res.json(withSuggestedAgency(report));
+    return res.json(withSuggestedAgency(report, req.user));
   } catch (err) {
     return res.status(400).json({ error: err.message });
   }
@@ -559,7 +1197,7 @@ router.patch('/:id/legal-hold', requireRole('admin'), async (req, res) => {
     if (!report) return res.status(404).json({ error: 'Report not found' });
     report.legalHold = !!legalHold;
     await report.save();
-    return res.json(withSuggestedAgency(report));
+    return res.json(withSuggestedAgency(report, req.user));
   } catch (err) {
     return res.status(400).json({ error: err.message });
   }
@@ -589,7 +1227,7 @@ router.patch('/:id/restore', requireRole('admin'), async (req, res) => {
     if (!report) return res.status(404).json({ error: 'Archived report not found' });
     report.archivedAt = null;
     await report.save();
-    return res.json(withSuggestedAgency(report));
+    return res.json(withSuggestedAgency(report, req.user));
   } catch (err) {
     return res.status(400).json({ error: err.message });
   }
@@ -619,28 +1257,48 @@ router.delete('/:id/permanent', requireRole('admin'), async (req, res) => {
 
 // GET /api/reports/:id/related-suggestions - soft suggestions only, never auto-merged (decision #16).
 router.get('/:id/related-suggestions', requireRole('reviewer', 'admin'), async (req, res) => {
+  if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+    return res.status(400).json({ error: 'Invalid report ID' });
+  }
+
   try {
     const report = await findActiveReport(req.params.id);
     if (!report) return res.status(404).json({ error: 'Report not found' });
+    if (await isBlockedSelfReview(report, req.user)) {
+      return res.status(403).json({ error: SELF_REVIEW_ERROR });
+    }
+    const hasOwnCategoryReview = report.categoryReview.annotations.some(
+      (item) => item.reviewer.toString() === req.user._id.toString()
+        && (item.decision === 'category' || (!item.decision && item.category))
+    );
+    if (!hasOwnCategoryReview) {
+      return res.status(403).json({ error: 'Submit a category assessment before viewing related-case suggestions' });
+    }
 
     const alreadyLinked = report.relatedCaseLinks.map((id) => id.toString());
     const candidates = await Report.find({
       archivedAt: null,
       _id: { $ne: report._id, $nin: alreadyLinked },
-      reportedCategory: report.reportedCategory,
       county: report.county
-    }).sort({ createdAt: -1 }).limit(10);
+    })
+      .select('_id title description county subCounty createdAt')
+      .sort({ createdAt: -1 })
+      .limit(MAX_CANDIDATES)
+      .lean();
 
-    return res.json(candidates.map((c) => ({
-      id: c._id,
-      trackingReference: c.trackingReference,
-      title: c.title,
-      reportedCategory: c.reportedCategory,
-      subCounty: c.subCounty,
-      createdAt: c.createdAt
+    const suggestions = suggestRelatedCases(report, candidates, { limit: MAX_SUGGESTIONS });
+    return res.json(suggestions.map(({ report: candidate, similarity, sharedTerms, lingoMatched }) => ({
+      id: candidate._id,
+      title: candidate.title,
+      subCounty: candidate.subCounty,
+      lingoMatched: !!lingoMatched,
+      createdAt: candidate.createdAt,
+      similarityPercent: Number((similarity * 100).toFixed(1)),
+      sharedTerms
     })));
   } catch (err) {
-    return res.status(400).json({ error: err.message });
+    console.error('Could not generate related-case suggestions:', err.message);
+    return res.status(500).json({ error: 'Could not generate related-case suggestions' });
   }
 });
 
@@ -648,6 +1306,12 @@ router.get('/:id/related-suggestions', requireRole('reviewer', 'admin'), async (
 router.post('/:id/link', requireRole('reviewer', 'admin'), async (req, res) => {
   try {
     const { relatedId } = req.body;
+    if (req.user.role === 'reviewer') {
+      const blocked = await findActiveReport(req.params.id);
+      if (blocked && await isBlockedSelfReview(blocked, req.user)) {
+        return res.status(403).json({ error: SELF_REVIEW_ERROR });
+      }
+    }
     if (!relatedId) return res.status(400).json({ error: 'relatedId is required' });
     if (relatedId === req.params.id) return res.status(400).json({ error: 'A case cannot be linked to itself' });
 
@@ -665,7 +1329,7 @@ router.post('/:id/link', requireRole('reviewer', 'admin'), async (req, res) => {
       related.relatedCaseLinks.push(report._id);
       await related.save();
     }
-    return res.json(withSuggestedAgency(report));
+    return res.json(withSuggestedAgency(report, req.user));
   } catch (err) {
     return res.status(400).json({ error: err.message });
   }

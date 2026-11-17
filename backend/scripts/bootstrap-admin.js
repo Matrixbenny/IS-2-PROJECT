@@ -2,7 +2,7 @@
 // Admin account outside the public app. Refuses to run if an admin already exists, so it
 // can never be used as a silent backdoor after initial deployment.
 //
-// Usage: set ADMIN_BOOTSTRAP_PASSWORD securely, then run
+// Usage: configure ADMIN_PASSWORD_HASH with scripts/set-admin-password.js, then run
 // node scripts/bootstrap-admin.js "Full Name" "admin@example.com"
 require('dotenv').config();
 const mongoose = require('mongoose');
@@ -11,13 +11,12 @@ const { normalizeEmail, getConfiguredAdminEmail } = require('../utils/adminIdent
 
 async function main() {
   const [, , name, email] = process.argv;
-  const password = process.env.ADMIN_BOOTSTRAP_PASSWORD;
-  if (!name || !email || !password) {
-    console.error('Set ADMIN_BOOTSTRAP_PASSWORD and run: node scripts/bootstrap-admin.js "Full Name" "admin@example.com"');
+  if (!name || !email) {
+    console.error('Run: node scripts/bootstrap-admin.js "Full Name" "admin@example.com"');
     process.exit(1);
   }
-  if (password.length < 8) {
-    console.error('Password must be at least 8 characters');
+  if (!process.env.ADMIN_PASSWORD_HASH || !/^\$2[aby]\$12\$/.test(process.env.ADMIN_PASSWORD_HASH)) {
+    console.error('Configure ADMIN_PASSWORD_HASH using node scripts/set-admin-password.js first.');
     process.exit(1);
   }
   const configuredAdminEmail = getConfiguredAdminEmail();
@@ -44,7 +43,7 @@ async function main() {
     process.exit(1);
   }
 
-  const admin = new User({ name, email: configuredAdminEmail, password, role: 'admin' });
+  const admin = new User({ name, email: configuredAdminEmail, role: 'admin' });
   await admin.save();
   console.log(`Admin account created: ${admin.email}`);
   process.exit(0);

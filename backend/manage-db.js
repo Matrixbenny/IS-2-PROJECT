@@ -2,6 +2,7 @@
 // Node.js script to manage kenya_watch MongoDB database using Mongoose
 
 const mongoose = require('mongoose');
+const crypto = require('crypto');
 require('dotenv').config();
 const Report = require('./report.model');
 const User = require('./user.model');
@@ -16,10 +17,10 @@ async function main() {
 
   // 1. Create a new user
   const user = await User.create({
-    name: 'Admin User',
-    email: 'admin@example.com',
-    password: 'hashedpassword', // Use bcrypt in real apps
-    role: 'admin'
+    name: 'Sample User',
+    email: 'sample-user@example.com',
+    password: crypto.randomBytes(48).toString('base64url'),
+    role: 'user'
   });
   console.log('Created user:', user);
 

@@ -27,34 +27,63 @@ function createApp() {
 
   // General anti-abuse ceiling across the whole API (decision #9) - generous, just
   // prevents runaway scripting; it never requires or retains any identity to apply.
-  app.use('/api', rateLimit({ windowMs: 15 * 60 * 1000, max: 300, standardHeaders: true, legacyHeaders: false }));
+  // In non-production a higher ceiling so hot-reload dev loops and browser-test
+  // sessions are not throttled by normal page polling (page polls every ~15s per tab).
+  const generalMax = process.env.NODE_ENV === 'production' ? 300 : 2000;
+  app.use('/api', rateLimit({ windowMs: 15 * 60 * 1000, max: generalMax, standardHeaders: true, legacyHeaders: false }));
 
   // Tighter caps on the two endpoints most relevant to abuse: anonymous submission
   // flooding and credential-stuffing / brute-force login attempts (decision #9).
+  // In development the caps are relaxed: a developer testing the app signs in and
+  // out many times from one machine, and a 15-minute lockout looks like "login is
+  // broken". Production keeps the strict limits.
+  const isProduction = process.env.NODE_ENV === 'production';
   const submitLimiter = rateLimit({
     windowMs: 60 * 60 * 1000,
-    max: 5,
+    max: isProduction ? 5 : 100,
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: 'Too many reports submitted from this network recently. Please try again later.' }
   });
   const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 10,
+    max: isProduction ? 10 : 200,
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: 'Too many attempts. Please wait a few minutes and try again.' }
   });
   const recordingStartLimiter = rateLimit({
     windowMs: 60 * 60 * 1000,
-    max: 20,
+    max: isProduction ? 20 : 200,
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: 'Too many recording sessions started from this network recently. Please try again later.' }
   });
-  app.use('/api/reports', (req, res, next) => (req.method === 'POST' && req.path === '/' ? submitLimiter(req, res, next) : next()));
+  const receiptEmailLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000,
+    max: isProduction ? 5 : 100,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Too many receipt verification attempts. Please try again later.' }
+  });
+  app.use('/api/reports', (req, res, next) => (req.method === 'POST' && req.path === '/' && process.env.NODE_ENV !== 'test' ? submitLimiter(req, res, next) : next()));
+  app.use('/api/reports/email-receipt', receiptEmailLimiter);
   app.use('/api/recordings', (req, res, next) => (req.method === 'POST' && req.path === '/' ? recordingStartLimiter(req, res, next) : next()));
-  app.use(['/api/auth/login', '/api/auth/register', '/api/auth/forgot-password'], authLimiter);
+  app.use([
+    '/api/auth/login',
+    '/api/auth/register',
+    '/api/auth/reviewer-application',
+    '/api/auth/agency-application',
+    '/api/auth/forgot-password',
+    '/api/auth/reset-password'
+  ], authLimiter);
+  app.use(['/api/reports/captcha-image', '/api/reports/captcha-challenge'], rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: isProduction ? 30 : 500,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Too many security challenges requested. Please wait and try again.' }
+  }));
 
   app.get('/', (req, res) => {
     res.send('Kenya Watch backend is running!');
@@ -68,7 +97,7 @@ function createApp() {
   app.use('/api/agency-portal', agencyPortalRoutes);
   app.use('/api/stats', statsRoutes);
 
-  // Concept/demo-only static site simulating an agency partner view (decision #7 - no real integration exists).
+  // Serves the local partner-portal UI; this is not connected to any government system.
   app.use('/agency-portal', express.static(path.join(__dirname, '..', 'agency-portal')));
 
   app.use((req, res) => {

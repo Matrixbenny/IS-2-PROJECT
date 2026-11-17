@@ -44,14 +44,33 @@ async function removeSession(session) {
   await sessions().deleteOne({ _id: session._id });
 }
 
+const ORPHAN_GRACE_MS = 24 * 60 * 60 * 1000;
+
 async function cleanExpiredSessions() {
   if (mongoose.connection.readyState !== 1) return;
   const expired = await sessions().find({ expiresAt: { $lte: new Date() } }).toArray();
   for (const session of expired) {
     if (activeWrites.has(session._id)) continue;
-    if (session.reportId && await Report.exists({ _id: session.reportId })) {
-      await sessions().deleteOne({ _id: session._id });
-      continue;
+
+    // A recording that is already attached to a report is evidence. Deleting
+    // the session record is fine, but the GridFS file itself must only be
+    // removed when the report no longer references it - otherwise a reporter's
+    // original recording silently disappears from their case.
+    if (session.reportId) {
+      const report = await Report.findOne({ _id: session.reportId }).select('evidence').lean();
+      const stillAttached = report?.evidence?.some(
+        (item) => item.gridFsId.toString() === session.fileId.toString()
+      );
+      if (stillAttached) {
+        await sessions().deleteOne({ _id: session._id });
+        continue;
+      }
+      if (report) {
+        // The report exists but no longer uses this file. Give the attachment
+        // flow a grace period before reclaiming storage.
+        const age = Date.now() - (session.startedAt?.getTime() || 0);
+        if (age < ORPHAN_GRACE_MS) continue;
+      }
     }
     await removeSession(session);
   }
