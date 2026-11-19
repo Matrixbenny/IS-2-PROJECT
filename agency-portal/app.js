@@ -305,6 +305,7 @@ function renderCases(cases) {
         <div class="ap-meta"><b>Location:</b> ${escapeHtml(item.subCounty)}, ${escapeHtml(item.county)}</div>
         <div class="ap-meta"><b>Received:</b> ${escapeHtml(item.referredAt ? new Date(item.referredAt).toLocaleString() : 'Date not recorded')}</div>
         <div class="ap-meta"><b>Agency file reference:</b> ${escapeHtml(item.referenceNumber || 'Not recorded')}</div>
+        ${(item.alsoReferredTo || []).length ? `<div class="ap-meta ap-coordination"><b>Also referred to:</b> ${escapeHtml(item.alsoReferredTo.join('; '))}. Coordinate with them through your usual channels to avoid duplicating work; Kenya Watch does not share their files with you.</div>` : ''}
         <section class="ap-brief">
           <h4>Referral brief</h4>
           ${renderBrief(item.referralSummary)}

@@ -67,19 +67,6 @@ const agencyUpdateSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 }, { _id: true });
 
-const previousReferralSchema = new mongoose.Schema({
-  agency: String,
-  referralSummary: String,
-  referenceNumber: String,
-  notes: String,
-  status: String,
-  referredAt: Date,
-  sentBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  sentByName: String,
-  endedAt: { type: Date, default: Date.now },
-  agencyUpdates: [agencyUpdateSchema]
-}, { _id: false });
-
 const agencyReferralSchema = new mongoose.Schema({
   agency: { type: String, default: null },
   referralSummary: { type: String, default: null },
@@ -126,9 +113,25 @@ const agencyReferralSchema = new mongoose.Schema({
   referredAt: { type: Date, default: null },
   sentBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   sentByName: { type: String, default: null },
-  previousReferrals: [previousReferralSchema],
+  // A case can be referred to several agencies at once (for example EACC for the
+  // bribery and the Auditor-General for the misused funds). A referral stays in
+  // the list for the audit record when it ends; it just stops being active.
+  endedAt: { type: Date, default: null },
+  endReason: { type: String, enum: ['transferred', 'withdrawn', null], default: null },
+  endNote: { type: String, default: null },
+  endedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+  // Every reopening of a closed referral, with the outcome it replaced.
+  reopenHistory: [{
+    reopenedAt: { type: Date, default: Date.now },
+    reopenedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    reopenedByName: { type: String, default: null },
+    reason: String,
+    previousOutcome: String,
+    previousOutcomeReference: String,
+    previousOutcomeSummary: String
+  }],
   agencyUpdates: [agencyUpdateSchema]
-}, { _id: false });
+}, { _id: true });
 
 const reportSchema = new mongoose.Schema({
   // Public lookup handle (decision #21) - always present regardless of submission path.
@@ -238,7 +241,20 @@ const reportSchema = new mongoose.Schema({
   },
   tags: [String],
 
-  agencyReferral: agencyReferralSchema,
+  // Further wrongdoing types the reporter says are involved, beyond the main
+  // category. They feed routing so a mixed case reaches every relevant agency.
+  additionalCategories: [{ type: String, enum: CATEGORIES }],
+  agencyReferrals: [agencyReferralSchema],
+  // What the routing aid suggested versus what the reviewer decided, kept so the
+  // suggestions can be measured against human judgement.
+  routingFeedback: [{
+    at: { type: Date, default: Date.now },
+    reviewer: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    suggested: [String],
+    chosen: String,
+    followedSuggestion: Boolean,
+    modelUsed: Boolean
+  }],
   relatedCaseLinks: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Report' }],
   claimedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   claimedAt: { type: Date, default: null },
@@ -255,6 +271,16 @@ reportSchema.index({ archivedAt: 1, createdAt: -1 });
 reportSchema.index({ county: 1, archivedAt: 1, createdAt: -1 });
 reportSchema.index({ user: 1, archivedAt: 1, createdAt: -1 });
 reportSchema.index({ claimedBy: 1, status: 1, 'classification.urgency': 1, 'classification.classifiedAt': 1 });
+
+// The referral an agency currently holds on this case, if any. An agency has at
+// most one active referral per case; ended ones remain only as history.
+reportSchema.methods.activeReferralFor = function activeReferralFor(agencyName) {
+  return (this.agencyReferrals || []).find((referral) => referral.agency === agencyName && !referral.endedAt) || null;
+};
+
+reportSchema.methods.activeReferrals = function activeReferrals() {
+  return (this.agencyReferrals || []).filter((referral) => referral.agency && !referral.endedAt);
+};
 
 // General tier (decision #21): safe for public browsing or Tracking Reference alone.
 reportSchema.methods.toGeneralTier = function toGeneralTier() {
@@ -293,20 +319,23 @@ reportSchema.methods.toDeepTier = function toDeepTier() {
       claimedAt: this.claimedAt || null,
       underReview: this.status === 'In Review'
     },
-    agencyProgress: this.agencyReferral?.agency ? {
-      agency: this.agencyReferral.agency,
-      status: this.agencyReferral.status || 'sent',
-      referredAt: this.agencyReferral.referredAt,
-      // The outcome the institution reached, in language the reporter can read.
-      outcome: this.agencyReferral.resolution?.outcome || null,
-      outcomeSummary: this.agencyReferral.resolution?.outcomeSummary || null,
-      outcomeReference: this.agencyReferral.resolution?.outcomeReference || null,
-      legalBasis: this.agencyReferral.resolution?.legalBasis || null,
-      closedAt: this.agencyReferral.resolution?.closedAt || null,
-      updates: (this.agencyReferral.agencyUpdates || [])
-        .filter((update) => update.publicMessageStatus === 'approved' && update.publicMessage)
-        .map((update) => ({ message: update.publicMessage, createdAt: update.createdAt }))
-    } : null
+    // One entry per agency working on the case; the reporter sees each one's
+    // progress and the outcome it reached, in language they can read.
+    agencyReferrals: (this.agencyReferrals || [])
+      .filter((referral) => referral.agency && !referral.endedAt)
+      .map((referral) => ({
+        agency: referral.agency,
+        status: referral.status || 'sent',
+        referredAt: referral.referredAt,
+        outcome: referral.resolution?.outcome || null,
+        outcomeSummary: referral.resolution?.outcomeSummary || null,
+        outcomeReference: referral.resolution?.outcomeReference || null,
+        legalBasis: referral.resolution?.legalBasis || null,
+        closedAt: referral.resolution?.closedAt || null,
+        updates: (referral.agencyUpdates || [])
+          .filter((update) => update.publicMessageStatus === 'approved' && update.publicMessage)
+          .map((update) => ({ message: update.publicMessage, createdAt: update.createdAt }))
+      }))
   };
 };
 
@@ -316,7 +345,9 @@ reportSchema.methods.toReviewerTier = function toReviewerTier() {
     ...this.toDeepTier(),
     classification: this.classification,
     tags: this.tags,
-    agencyReferral: this.agencyReferral,
+    agencyReferrals: this.agencyReferrals,
+    additionalCategories: this.additionalCategories,
+    routingFeedback: this.routingFeedback,
     relatedCaseLinks: this.relatedCaseLinks,
     claimedBy: this.claimedBy,
     legalHold: this.legalHold,

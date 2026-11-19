@@ -2517,3 +2517,20 @@ section.kw-page-card > h3,
 }
 .kw-privacy ul { padding-left: 22px; line-height: 1.65; }
 .kw-privacy p { line-height: 1.65; }
+
+/* Multi-agency routing and referral cards */
+.kw-routing { margin: 16px 0; padding: 14px 16px; border: 1px solid #99f6e4; border-left: 4px solid #0f766e; border-radius: 10px; background: #f0fdfa; }
+.kw-routing h4 { margin-top: 0; }
+.kw-routing-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 10px; }
+.kw-routing-agency { padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; }
+.kw-routing-recommended { border-color: #0f766e; box-shadow: 0 0 0 1px #0f766e inset; }
+.kw-routing-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.kw-referral-card { margin: 14px 0; border-left: 4px solid #0f766e; }
+.kw-referral-card h4 { margin-top: 0; }
+.kw-casefile-edit, .kw-end-referral, .kw-reopen { margin-top: 12px; padding: 8px 10px; border: 1px dashed #94a3b8; border-radius: 8px; }
+.kw-additional-categories { border: 1px solid #cbd5e1; border-radius: 10px; padding: 10px 14px; }
+.kw-additional-categories legend { font-weight: 600; padding: 0 6px; }
+.kw-checkbox-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 6px 14px; margin-top: 8px; }
+.kw-checkbox-option { display: flex; align-items: center; gap: 8px; font-weight: 400; }
+.kw-checkbox-option input { width: auto; }
+.kw-agency-progress + .kw-agency-progress { margin-top: 14px; padding-top: 12px; border-top: 1px solid #e2e8f0; }

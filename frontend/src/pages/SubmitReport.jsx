@@ -33,6 +33,7 @@ function SubmitReport() {
   const [fieldsByCategory, setFieldsByCategory] = useState({});
   const [form, setForm] = useState(emptyForm);
   const [categoryDetails, setCategoryDetails] = useState({});
+  const [additionalCategories, setAdditionalCategories] = useState([]);
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -152,6 +153,7 @@ function SubmitReport() {
       if (form.gender) payload.append('gender', form.gender);
       if (form.occupation) payload.append('occupation', form.occupation);
       payload.append('categorySpecificDetails', JSON.stringify(categoryDetails));
+      if (additionalCategories.length > 0) payload.append('additionalCategories', JSON.stringify(additionalCategories));
       payload.append('captchaToken', captchaToken);
       payload.append('captchaAnswer', captchaAnswer);
       if (recordingToken) payload.append('recordingToken', recordingToken);
@@ -328,6 +330,34 @@ function SubmitReport() {
             {categories.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
+
+        {form.reportedCategory && (
+          <fieldset className="kw-form-section kw-additional-categories">
+            <legend>{t('label_additionalCategories')}</legend>
+            <div className="kw-helper">{t('help_additionalCategories')}</div>
+            <div className="kw-checkbox-grid">
+              {categories
+                .filter((c) => c !== form.reportedCategory && c !== 'Other')
+                .map((c) => {
+                  const checked = additionalCategories.includes(c);
+                  const atLimit = additionalCategories.length >= 3 && !checked;
+                  return (
+                    <label key={c} className="kw-checkbox-option">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        disabled={atLimit}
+                        onChange={() => setAdditionalCategories(
+                          checked ? additionalCategories.filter((item) => item !== c) : [...additionalCategories, c]
+                        )}
+                      />
+                      <span>{c}</span>
+                    </label>
+                  );
+                })}
+            </div>
+          </fieldset>
+        )}
 
         {activeFields.length > 0 && (
           <div className="kw-category-fields">

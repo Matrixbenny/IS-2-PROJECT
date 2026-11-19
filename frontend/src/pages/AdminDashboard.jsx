@@ -172,6 +172,35 @@ function AdminDashboard() {
               <div><strong>{overview.agencyReferrals.updates}</strong><span>agency updates recorded</span></div>
               <div><strong>{overview.agencyReferrals.pendingReporterMessages}</strong><span>reporter messages awaiting review</span></div>
             </div>
+            {(overview.agencyReferrals.staleReferrals || []).length > 0 && (
+              <div className="kw-admin-recent-referrals">
+                <h4>Referrals that have stalled ({overview.agencyReferrals.staleCount})</h4>
+                <p className="kw-helper">
+                  Not acknowledged within {overview.agencyReferrals.staleThresholds.unacknowledgedHours} hours, or no activity for{' '}
+                  {overview.agencyReferrals.staleThresholds.idleDays} days. Follow up with the institution's liaison.
+                </p>
+                <ul className="kw-admin-attention-list">
+                  {overview.agencyReferrals.staleReferrals.map((item, index) => (
+                    <li className="kw-admin-attention-item" key={`${item.reportId}-${item.agency}-${index}`}>
+                      <div className="kw-admin-attention-copy">
+                        <span className="kw-tracking-chip">{item.trackingReference}</span>
+                        <strong>{item.agency}</strong>
+                        <span className="kw-admin-attention-meta">
+                          {(item.status || 'sent').replaceAll('_', ' ')} · last activity {new Date(item.lastActivity).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <Link to="/reviewer-queue" state={{ focusReportId: item.reportId }} className="kw-admin-case-link">Open case</Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {overview.agencyReferrals.routing?.decisions > 0 && (
+              <p className="kw-helper">
+                Routing aid: reviewers followed its recommendation in {overview.agencyReferrals.routing.followedSuggestion} of{' '}
+                {overview.agencyReferrals.routing.decisions} referrals. This measures agreement, not correctness.
+              </p>
+            )}
             {(overview.agencyReferrals.informationRequestsAwaitingAnswer || []).length > 0 && (
               <div className="kw-admin-recent-referrals">
                 <h4>Agency questions awaiting a Kenya Watch answer ({overview.agencyReferrals.openInformationRequests})</h4>

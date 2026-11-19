@@ -63,6 +63,15 @@ const AGENCIES = [
     legalBasis: "Constitution Article 234; Public Service Commission Act, 2017",
   },
   {
+    name: "Independent Policing Oversight Authority (IPOA)",
+    handles: ["Bribery", "Extortion", "Abuse of Office"],
+    role: "oversight",
+    // Only relevant when the allegation involves police conduct, so it is
+    // suggested from the narrative rather than from the category alone.
+    textTriggers: ["police", "polisi", "traffic officer", "administration police", "gsu", "askari"],
+    legalBasis: "Independent Policing Oversight Authority Act, 2011",
+  },
+  {
     name: "Office of the Registrar of Political Parties",
     handles: ["Conflict of Interest"],
     role: "oversight",

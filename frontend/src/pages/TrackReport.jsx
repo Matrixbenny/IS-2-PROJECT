@@ -7,6 +7,14 @@ function statusClass(status) {
   return `status-${status.toLowerCase().replace(/\s+/g, '-')}`;
 }
 
+const OUTCOME_LABELS = {
+  investigated_charged: 'Investigated and charges filed',
+  investigated_no_action: 'Investigated, no charges filed',
+  referred_elsewhere: 'Referred to another authority',
+  administrative_action: 'Administrative action taken',
+  not_pursued: 'Not pursued by this institution'
+};
+
 function TrackReport() {
   const [ref, setRef] = useState('');
   const [key, setKey] = useState('');
@@ -109,45 +117,44 @@ function TrackReport() {
               </li>
             ))}
           </ul>
-          {report.agencyProgress && (
+          {report.agencyReferrals?.length > 0 && (
             <section aria-labelledby="agency-progress-heading">
-              <h4 id="agency-progress-heading">Agency follow-up</h4>
-              {report.agencyProgress.outcome && (
-                <div className="kw-outcome-panel" role="status">
-                  <div className="kw-outcome-heading">
-                    <span className="kw-claimed-tick" aria-hidden="true">✓</span>
-                    <strong>Outcome from {report.agencyProgress.agency}</strong>
-                  </div>
-                  <p className="kw-outcome-label">
-                    {{ investigated_charged: 'Investigated and charges filed',
-                       investigated_no_action: 'Investigated, no charges filed',
-                       referred_elsewhere: 'Referred to another authority',
-                       administrative_action: 'Administrative action taken',
-                       not_pursued: 'Not pursued by this institution' }[report.agencyProgress.outcome]
-                      || report.agencyProgress.outcome}
+              <h4 id="agency-progress-heading">
+                {report.agencyReferrals.length > 1 ? 'Agency follow-up (several institutions are handling your report)' : 'Agency follow-up'}
+              </h4>
+              {report.agencyReferrals.map((referral) => (
+                <div key={referral.agency} className="kw-agency-progress">
+                  {referral.outcome && (
+                    <div className="kw-outcome-panel" role="status">
+                      <div className="kw-outcome-heading">
+                        <span className="kw-claimed-tick" aria-hidden="true">✓</span>
+                        <strong>Outcome from {referral.agency}</strong>
+                      </div>
+                      <p className="kw-outcome-label">{OUTCOME_LABELS[referral.outcome] || referral.outcome}</p>
+                      <p className="kw-outcome-summary">{referral.outcomeSummary}</p>
+                      <div className="kw-pro-meta">
+                        {referral.outcomeReference && <div><b>Reference:</b> {referral.outcomeReference}</div>}
+                        {referral.legalBasis && <div><b>Legal basis:</b> {referral.legalBasis}</div>}
+                        {referral.closedAt && <div><b>Closed:</b> {new Date(referral.closedAt).toLocaleDateString()}</div>}
+                      </div>
+                    </div>
+                  )}
+                  <p className="kw-pro-meta">
+                    Referred to {referral.agency} · {referral.status.replaceAll('_', ' ')}
                   </p>
-                  <p className="kw-outcome-summary">{report.agencyProgress.outcomeSummary}</p>
-                  <div className="kw-pro-meta">
-                    {report.agencyProgress.outcomeReference && <div><b>Reference:</b> {report.agencyProgress.outcomeReference}</div>}
-                    {report.agencyProgress.legalBasis && <div><b>Legal basis:</b> {report.agencyProgress.legalBasis}</div>}
-                    {report.agencyProgress.closedAt && <div><b>Closed:</b> {new Date(report.agencyProgress.closedAt).toLocaleDateString()}</div>}
-                  </div>
+                  {referral.updates.length > 0 ? (
+                    <ul>
+                      {referral.updates.map((update, index) => (
+                        <li key={`${update.createdAt}-${index}`} className="kw-pro-meta">
+                          {update.message} · {new Date(update.createdAt).toLocaleString()}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    !referral.outcome && <p className="kw-helper">The agency is handling the referral. Reporter-facing messages appear here after Kenya Watch review.</p>
+                  )}
                 </div>
-              )}
-              <p className="kw-pro-meta">
-                Referred to {report.agencyProgress.agency} · {report.agencyProgress.status.replaceAll('_', ' ')}
-              </p>
-              {report.agencyProgress.updates.length > 0 ? (
-                <ul>
-                  {report.agencyProgress.updates.map((update, index) => (
-                    <li key={`${update.createdAt}-${index}`} className="kw-pro-meta">
-                      {update.message} · {new Date(update.createdAt).toLocaleString()}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="kw-helper">The agency is handling the referral. Reporter-facing messages appear here after Kenya Watch review.</p>
-              )}
+              ))}
             </section>
           )}
         </div>

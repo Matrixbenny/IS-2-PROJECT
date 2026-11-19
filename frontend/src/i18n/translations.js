@@ -32,6 +32,9 @@ const translations = {
     submit_loggedIn: "this will appear in your My Reports page.",
     label_title: "Title",
     label_category: "Category",
+    label_additionalCategories: "Does this also involve other kinds of wrongdoing? (optional)",
+    help_additionalCategories:
+      "For example a bribe paid to hide stolen funds. Choose up to three. This helps send your report to every institution that should see it.",
     label_description: "Description",
     label_county: "County",
     label_subCounty: "Sub-county",
@@ -134,6 +137,9 @@ const translations = {
     submit_loggedIn: "hii itaonekana kwenye ukurasa wako wa Ripoti Zangu.",
     label_title: "Kichwa",
     label_category: "Aina",
+    label_additionalCategories: "Je, kuna aina nyingine za ufisadi zinazohusika pia? (si lazima)",
+    help_additionalCategories:
+      "Kwa mfano hongo iliyolipwa kuficha pesa zilizoibwa. Chagua hadi tatu. Hii husaidia ripoti yako kufikia kila taasisi inayopaswa kuiona.",
     label_description: "Maelezo",
     label_county: "Kaunti",
     label_subCounty: "Kaunti Ndogo",

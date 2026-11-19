@@ -149,13 +149,13 @@ test('Agency portal is scoped, shares only a referral brief, and returns only ap
     description: 'This detailed original complaint is not shared with agency officers.',
     county: 'Nairobi',
     subCounty: 'Westlands',
-    agencyReferral: {
+    agencyReferrals: [{
       agency: agency.name,
       referralSummary: 'A reviewer-approved brief describing the reported procurement concern and requested oversight.',
       status: 'sent',
       referredAt: new Date(),
       notes: 'Internal liaison note not shared with the partner.'
-    },
+    }],
     evidence: [{ gridFsId: new mongoose.Types.ObjectId(), filename: 'evidence.pdf', type: 'document' }]
   });
   await Report.create({
@@ -166,7 +166,7 @@ test('Agency portal is scoped, shares only a referral brief, and returns only ap
     county: 'Nairobi',
     subCounty: 'Kibra',
     archivedAt: new Date(),
-    agencyReferral: { agency: agency.name, referralSummary: 'Archived referral details are unavailable to partners.' }
+    agencyReferrals: [{ agency: agency.name, referralSummary: 'Archived referral details are unavailable to partners.' }]
   });
   await Report.create({
     trackingReference: 'KW-AGY003',
@@ -175,10 +175,10 @@ test('Agency portal is scoped, shares only a referral brief, and returns only ap
     description: 'A case for a different partner.',
     county: 'Nairobi',
     subCounty: 'Kibra',
-    agencyReferral: {
+    agencyReferrals: [{
       agency: otherAgency.name,
       referralSummary: 'This brief belongs to another institution and is not visible to this officer.'
-    }
+    }]
   });
   await Report.create({
     trackingReference: 'KW-AGY006',
@@ -187,7 +187,7 @@ test('Agency portal is scoped, shares only a referral brief, and returns only ap
     description: 'A previous demo referral has no new minimal-data packet yet.',
     county: 'Nairobi',
     subCounty: 'Kibera',
-    agencyReferral: { agency: agency.name }
+    agencyReferrals: [{ agency: agency.name }]
   });
   const otherOfficer = await User.create({
     name: 'Other Agency Officer',
@@ -214,7 +214,7 @@ test('Agency portal is scoped, shares only a referral brief, and returns only ap
     .set('Cookie', agencySessionCookie);
   assert.strictEqual(cases.status, 200, JSON.stringify(cases.body));
   assert.deepStrictEqual(cases.body.map((item) => item.id), [report._id.toString()]);
-  assert.strictEqual(cases.body[0].referralSummary, report.agencyReferral.referralSummary);
+  assert.strictEqual(cases.body[0].referralSummary, report.agencyReferrals[0].referralSummary);
   assert.strictEqual(cases.body[0].description, undefined);
   assert.strictEqual(cases.body[0].categorySpecificDetails, undefined);
   assert.strictEqual(cases.body[0].title, undefined);
@@ -253,19 +253,19 @@ test('Agency portal is scoped, shares only a referral brief, and returns only ap
     });
   assert.strictEqual(update.status, 201);
   const savedReport = await Report.findById(report._id);
-  assert.strictEqual(savedReport.agencyReferral.status, 'acknowledged');
-  assert.strictEqual(savedReport.agencyReferral.agencyUpdates[0].createdByEmail, agencyOfficer.email);
-  assert.strictEqual(savedReport.agencyReferral.agencyUpdates[0].publicMessageStatus, 'pending');
+  assert.strictEqual(savedReport.agencyReferrals[0].status, 'acknowledged');
+  assert.strictEqual(savedReport.agencyReferrals[0].agencyUpdates[0].createdByEmail, agencyOfficer.email);
+  assert.strictEqual(savedReport.agencyReferrals[0].agencyUpdates[0].publicMessageStatus, 'pending');
 
   const hiddenReporterMessage = await request(app)
     .get('/api/reports/track')
     .query({ ref: 'KW-AGY001', key: 'private-tracking-key' });
   assert.strictEqual(hiddenReporterMessage.status, 200);
-  assert.strictEqual(hiddenReporterMessage.body.agencyProgress.status, 'acknowledged');
-  assert.deepStrictEqual(hiddenReporterMessage.body.agencyProgress.updates, []);
+  assert.strictEqual(hiddenReporterMessage.body.agencyReferrals[0].status, 'acknowledged');
+  assert.deepStrictEqual(hiddenReporterMessage.body.agencyReferrals[0].updates, []);
 
   const approval = await request(app)
-    .patch(`/api/agency-portal/cases/${report._id}/updates/${savedReport.agencyReferral.agencyUpdates[0]._id}/review`)
+    .patch(`/api/agency-portal/cases/${report._id}/updates/${savedReport.agencyReferrals[0].agencyUpdates[0]._id}/review`)
     .set('Cookie', adminCookie)
     .send({ decision: 'approved' });
   assert.strictEqual(approval.status, 200);
@@ -273,7 +273,7 @@ test('Agency portal is scoped, shares only a referral brief, and returns only ap
   const visibleReporterMessage = await request(app)
     .get('/api/reports/track')
     .query({ ref: 'KW-AGY001', key: 'private-tracking-key' });
-  assert.deepStrictEqual(visibleReporterMessage.body.agencyProgress.updates.map((item) => item.message), [
+  assert.deepStrictEqual(visibleReporterMessage.body.agencyReferrals[0].updates.map((item) => item.message), [
     'Your report has been received by the responsible agency.'
   ]);
 });
@@ -291,5 +291,5 @@ test('agency access can be deactivated without deleting referral audit attributi
     .set('Cookie', agencySessionCookie);
   assert.strictEqual(rejectedRequest.status, 401);
   const reportAfterDeactivation = await Report.findById(report._id);
-  assert.strictEqual(reportAfterDeactivation.agencyReferral.agencyUpdates[0].createdByEmail, agencyOfficer.email);
+  assert.strictEqual(reportAfterDeactivation.agencyReferrals[0].agencyUpdates[0].createdByEmail, agencyOfficer.email);
 });

@@ -76,7 +76,10 @@ const HIGH_KEYWORDS = [
 // code-switching all land in the same keyword space (decision #31).
 const normalizeText = normaliseForMatching;
 
-function scoreCategory(text) {
+// Score every category, not only the best one. A single report can describe
+// more than one kind of wrongdoing (for example a bribe to hide embezzlement),
+// and routing needs to see all of them.
+function scoreAllCategories(text) {
   const lower = normalizeText(text);
   const scores = {};
   for (const category of Object.keys(CATEGORY_KEYWORDS)) {
@@ -91,6 +94,11 @@ function scoreCategory(text) {
       0
     );
   }
+  return scores;
+}
+
+function scoreCategory(text) {
+  const scores = scoreAllCategories(text);
   let best = 'Other';
   let bestScore = 0;
   for (const [category, score] of Object.entries(scores)) {
@@ -140,4 +148,4 @@ function classifyReportText({ title = '', description = '', evidenceCount = 0 })
   };
 }
 
-module.exports = { classifyReportText };
+module.exports = { classifyReportText, scoreAllCategories };

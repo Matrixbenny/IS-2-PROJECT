@@ -9,13 +9,15 @@ const { MAX_CANDIDATES, MAX_SUGGESTIONS, suggestRelatedCases } = require('../uti
 const {
   ModelArtifactError,
   classifyText,
+  scoreCategories,
   hasIndependentCategoryAssessment
 } = require('../utils/experimentalCategoryModel');
+const { suggestRouting } = require('../utils/routing');
 const { upload } = require('../middleware/upload');
 const { storeEvidenceFile } = require('../utils/evidence');
 const { getBucket, deleteGridFsFile } = require('../utils/gridfs');
 const { requireAuth, requireRole } = require('../middleware/auth');
-const { AGENCIES, suggestAgencyForCategory, slugify } = require('../utils/agencies');
+const { AGENCIES, slugify } = require('../utils/agencies');
 const mailer = require('../utils/mailer');
 const { notifyReporterOfStatusChange } = require('../utils/reportStatusNotifications');
 const { SELF_REVIEW_ERROR, isBlockedSelfReview, isOwnReport } = require('../utils/selfReview');
@@ -29,6 +31,11 @@ const {
 } = require('../utils/reportEmailReceipt');
 
 const router = express.Router();
+
+// A referral the agency has not acknowledged within this window, or that has
+// seen no activity for this long, is flagged to the Admin as stalled.
+const REFERRAL_UNACKNOWLEDGED_HOURS = 72;
+const REFERRAL_IDLE_DAYS = 14;
 
 function pickCategoryDetails(reportedCategory, submitted = {}) {
   const allowedFields = (CATEGORY_FIELDS[reportedCategory] || []).map((f) => f.name);
@@ -149,6 +156,22 @@ router.post('/', upload.array('evidence', 10), async (req, res) => {
     if (description.length < 20) {
       return res.status(400).json({ error: 'Please provide a more detailed description (at least 20 characters)' });
     }
+    // Other kinds of wrongdoing the same case involves (a bribe to hide embezzled
+    // funds, for example). Optional; they help route the case to every relevant agency.
+    let additionalCategories = [];
+    if (req.body.additionalCategories) {
+      const submitted = typeof req.body.additionalCategories === 'string'
+        ? JSON.parse(req.body.additionalCategories)
+        : req.body.additionalCategories;
+      if (!Array.isArray(submitted) || submitted.some((item) => !CATEGORIES.includes(item))) {
+        return res.status(400).json({ error: 'Additional categories must be chosen from the category list' });
+      }
+      additionalCategories = Array.from(new Set(submitted))
+        .filter((item) => item !== reportedCategory && item !== 'Other');
+      if (additionalCategories.length > 3) {
+        return res.status(400).json({ error: 'Choose at most three additional categories' });
+      }
+    }
 
     let categorySpecificDetails = {};
     if (req.body.categorySpecificDetails) {
@@ -237,6 +260,7 @@ router.post('/', upload.array('evidence', 10), async (req, res) => {
       user: isPathB ? req.user._id : null,
       title: title.trim(),
       reportedCategory,
+      additionalCategories,
       categorySpecificDetails,
       description,
       county,
@@ -365,8 +389,8 @@ router.post('/:id/comments', requireAuth, async (req, res) => {
 function withSuggestedAgency(report, user) {
   const result = report.toReviewerTier();
   // Lets the queue flag cases where the receiving agency is waiting on us.
-  result.openInformationRequests = (report.agencyReferral?.informationRequests || [])
-    .filter((item) => item.status === 'open').length;
+  result.openInformationRequests = report.activeReferrals()
+    .reduce((total, referral) => total + (referral.informationRequests || []).filter((item) => item.status === 'open').length, 0);
   const annotations = report.categoryReview?.annotations || [];
   const ownAnnotation = user && annotations.find((item) => item.reviewer.toString() === user._id.toString());
   const isAdjudicator = user
@@ -393,7 +417,6 @@ function withSuggestedAgency(report, user) {
     result.tags = [];
     return result;
   }
-  result.suggestedAgency = suggestAgencyForCategory(report.reportedCategory);
   return result;
 }
 
@@ -752,38 +775,23 @@ router.get('/admin-overview', requireRole('admin'), async (req, res) => {
         }
       ]),
       Report.aggregate([
-        {
-          $match: {
-            archivedAt: null,
-            'agencyReferral.agency': { $type: 'string', $ne: '' }
-          }
-        },
-        {
-          $addFields: {
-            currentAgencyUpdates: { $ifNull: ['$agencyReferral.agencyUpdates', []] }
-          }
-        },
+        { $match: { archivedAt: null } },
+        { $unwind: '$agencyReferrals' },
+        { $match: { 'agencyReferrals.agency': { $type: 'string', $ne: '' }, 'agencyReferrals.endedAt': null } },
         {
           $group: {
-            _id: '$agencyReferral.agency',
+            _id: '$agencyReferrals.agency',
             reports: { $sum: 1 },
-            updates: { $sum: { $size: '$currentAgencyUpdates' } }
+            updates: { $sum: { $size: { $ifNull: ['$agencyReferrals.agencyUpdates', []] } } }
           }
         },
         { $sort: { reports: -1, _id: 1 } }
       ]),
       Report.aggregate([
-        {
-          $match: {
-            archivedAt: null,
-            'agencyReferral.agency': { $type: 'string', $ne: '' }
-          }
-        },
-        {
-          $addFields: {
-            dashboardReferralAt: { $ifNull: ['$agencyReferral.referredAt', '$createdAt'] }
-          }
-        },
+        { $match: { archivedAt: null } },
+        { $unwind: '$agencyReferrals' },
+        { $match: { 'agencyReferrals.agency': { $type: 'string', $ne: '' }, 'agencyReferrals.endedAt': null } },
+        { $addFields: { dashboardReferralAt: { $ifNull: ['$agencyReferrals.referredAt', '$createdAt'] } } },
         { $sort: { dashboardReferralAt: -1 } },
         { $limit: 5 },
         {
@@ -794,45 +802,49 @@ router.get('/admin-overview', requireRole('admin'), async (req, res) => {
             status: 1,
             county: 1,
             subCounty: 1,
-            agency: '$agencyReferral.agency',
-            referralStatus: '$agencyReferral.status',
-            referenceNumber: '$agencyReferral.referenceNumber',
+            agency: '$agencyReferrals.agency',
+            referralStatus: '$agencyReferrals.status',
+            referenceNumber: '$agencyReferrals.referenceNumber',
             referredAt: '$dashboardReferralAt',
-            agencyUpdateCount: { $size: { $ifNull: ['$agencyReferral.agencyUpdates', []] } }
+            agencyUpdateCount: { $size: { $ifNull: ['$agencyReferrals.agencyUpdates', []] } }
           }
         }
       ]),
       Report.aggregate([
         { $match: { archivedAt: null } },
-        { $unwind: '$agencyReferral.agencyUpdates' },
+        { $unwind: '$agencyReferrals' },
+        { $unwind: '$agencyReferrals.agencyUpdates' },
         {
           $match: {
-            'agencyReferral.agencyUpdates.publicMessageStatus': 'pending',
-            'agencyReferral.agencyUpdates.publicMessage': { $type: 'string', $ne: '' }
+            'agencyReferrals.endedAt': null,
+            'agencyReferrals.agencyUpdates.publicMessageStatus': 'pending',
+            'agencyReferrals.agencyUpdates.publicMessage': { $type: 'string', $ne: '' }
           }
         },
         { $count: 'count' }
       ]),
       Report.aggregate([
         { $match: { archivedAt: null } },
-        { $unwind: '$agencyReferral.agencyUpdates' },
+        { $unwind: '$agencyReferrals' },
+        { $unwind: '$agencyReferrals.agencyUpdates' },
         {
           $match: {
-            'agencyReferral.agencyUpdates.publicMessageStatus': 'pending',
-            'agencyReferral.agencyUpdates.publicMessage': { $type: 'string', $ne: '' }
+            'agencyReferrals.endedAt': null,
+            'agencyReferrals.agencyUpdates.publicMessageStatus': 'pending',
+            'agencyReferrals.agencyUpdates.publicMessage': { $type: 'string', $ne: '' }
           }
         },
-        { $sort: { 'agencyReferral.agencyUpdates.createdAt': 1 } },
+        { $sort: { 'agencyReferrals.agencyUpdates.createdAt': 1 } },
         { $limit: 10 },
         {
           $project: {
             _id: 0,
             reportId: '$_id',
             trackingReference: 1,
-            agency: '$agencyReferral.agency',
-            updateId: '$agencyReferral.agencyUpdates._id',
-            message: '$agencyReferral.agencyUpdates.publicMessage',
-            createdAt: '$agencyReferral.agencyUpdates.createdAt'
+            agency: '$agencyReferrals.agency',
+            updateId: '$agencyReferrals.agencyUpdates._id',
+            message: '$agencyReferrals.agencyUpdates.publicMessage',
+            createdAt: '$agencyReferrals.agencyUpdates.createdAt'
           }
         }
       ])
@@ -842,20 +854,64 @@ router.get('/admin-overview', requireRole('admin'), async (req, res) => {
     // stalled until Kenya Watch replies, so the Admin must be able to see them.
     const openInfoRows = await Report.aggregate([
       { $match: { archivedAt: null } },
-      { $unwind: '$agencyReferral.informationRequests' },
-      { $match: { 'agencyReferral.informationRequests.status': 'open' } },
-      { $sort: { 'agencyReferral.informationRequests.requestedAt': 1 } },
+      { $unwind: '$agencyReferrals' },
+      { $unwind: '$agencyReferrals.informationRequests' },
+      { $match: { 'agencyReferrals.endedAt': null, 'agencyReferrals.informationRequests.status': 'open' } },
+      { $sort: { 'agencyReferrals.informationRequests.requestedAt': 1 } },
       {
         $project: {
           _id: 0,
           reportId: '$_id',
           trackingReference: 1,
-          agency: '$agencyReferral.agency',
-          question: '$agencyReferral.informationRequests.question',
-          requestedAt: '$agencyReferral.informationRequests.requestedAt'
+          agency: '$agencyReferrals.agency',
+          question: '$agencyReferrals.informationRequests.question',
+          requestedAt: '$agencyReferrals.informationRequests.requestedAt'
         }
       }
     ]);
+
+    // Justice delayed is justice denied: referrals the agency has not even
+    // acknowledged, or that have had no activity for weeks, are surfaced here.
+    const now = Date.now();
+    const sentCutoff = new Date(now - REFERRAL_UNACKNOWLEDGED_HOURS * 3600 * 1000);
+    const idleCutoff = new Date(now - REFERRAL_IDLE_DAYS * 86400 * 1000);
+    const staleRows = await Report.aggregate([
+      { $match: { archivedAt: null } },
+      { $unwind: '$agencyReferrals' },
+      { $match: { 'agencyReferrals.endedAt': null, 'agencyReferrals.status': { $ne: 'closed' } } },
+      {
+        $addFields: {
+          lastActivity: {
+            $max: { $concatArrays: [
+              [{ $ifNull: ['$agencyReferrals.referredAt', '$createdAt'] }],
+              { $map: { input: { $ifNull: ['$agencyReferrals.agencyUpdates', []] }, as: 'u', in: '$$u.createdAt' } }
+            ] }
+          },
+          staleBefore: { $cond: [{ $eq: ['$agencyReferrals.status', 'sent'] }, sentCutoff, idleCutoff] }
+        }
+      },
+      { $match: { $expr: { $lt: ['$lastActivity', '$staleBefore'] } } },
+      { $sort: { lastActivity: 1 } },
+      {
+        $project: {
+          _id: 0,
+          reportId: '$_id',
+          trackingReference: 1,
+          agency: '$agencyReferrals.agency',
+          status: '$agencyReferrals.status',
+          lastActivity: 1
+        }
+      }
+    ]);
+
+    // How often reviewers accept the routing aid's recommendation.
+    const routingRows = await Report.aggregate([
+      { $match: { archivedAt: null } },
+      { $unwind: '$routingFeedback' },
+      { $group: { _id: '$routingFeedback.followedSuggestion', count: { $sum: 1 } } }
+    ]);
+    const routingFollowed = routingRows.find((row) => row._id === true)?.count || 0;
+    const routingTotal = routingRows.reduce((sum, row) => sum + row.count, 0);
 
     const statusCounts = Object.fromEntries(statuses.map(({ _id, count }) => [_id, count]));
     const roleCounts = Object.fromEntries(roles.map(({ _id, count }) => [_id, count]));
@@ -891,7 +947,14 @@ router.get('/admin-overview', requireRole('admin'), async (req, res) => {
         pendingReporterMessages: pendingAgencyMessageCount[0]?.count || 0,
         messagesForReview: pendingAgencyMessages,
         openInformationRequests: openInfoRows.length,
-        informationRequestsAwaitingAnswer: openInfoRows.slice(0, 10)
+        informationRequestsAwaitingAnswer: openInfoRows.slice(0, 10),
+        staleCount: staleRows.length,
+        staleReferrals: staleRows.slice(0, 10),
+        staleThresholds: { unacknowledgedHours: REFERRAL_UNACKNOWLEDGED_HOURS, idleDays: REFERRAL_IDLE_DAYS },
+        routing: {
+          decisions: routingTotal,
+          followedSuggestion: routingFollowed
+        }
       }
     });
   } catch (err) {
@@ -986,11 +1049,82 @@ router.post('/:id/claim', requireRole('reviewer', 'admin'), async (req, res) => 
   }
 });
 
+// GET /api/reports/:id/routing-suggestion - which institution(s) should receive
+// this case. Combines the reporter's category (and any extra wrongdoing types they
+// flagged), the narrative keywords and - only once the reviewer has recorded their
+// own independent category - the experimental model. Advisory: the reviewer
+// confirms or corrects every referral.
+router.get('/:id/routing-suggestion', requireRole('reviewer', 'admin'), async (req, res) => {
+  if (!mongoose.Types.ObjectId.isValid(req.params.id)) return res.status(400).json({ error: 'Invalid report id' });
+  try {
+    const report = await findActiveReport(req.params.id);
+    if (!report) return res.status(404).json({ error: 'Report not found' });
+    const annotations = report.categoryReview?.annotations || [];
+    const hasOwnAssessment = annotations.some((item) => item.reviewer.toString() === req.user._id.toString())
+      || report.categoryReview?.adjudicatedBy?.toString() === req.user._id.toString();
+    if (!hasOwnAssessment) {
+      return res.status(409).json({ error: 'Submit your independent category assessment before viewing routing suggestions.' });
+    }
+    const routing = await buildRouting(report, req.user);
+    const existing = report.activeReferrals().map((referral) => referral.agency);
+    return res.json({
+      ...routing,
+      agencies: routing.agencies.map((agency) => ({ ...agency, alreadyReferred: existing.includes(agency.name) })),
+      advisoryOnly: true
+    });
+  } catch (err) {
+    console.error('[routing] suggestion failed:', err.message);
+    return res.status(500).json({ error: 'Could not generate routing suggestions' });
+  }
+});
+
+async function availableAgencySlugs() {
+  return new Set(await User.distinct('agencySlug', {
+    role: 'agency',
+    isActive: true,
+    agencyInvitationAcceptedAt: { $ne: null }
+  }));
+}
+
+async function buildRouting(report, user) {
+  let modelScores = null;
+  if (hasIndependentCategoryAssessment(report.categoryReview, user._id)) {
+    try {
+      modelScores = scoreCategories({ title: report.title, description: report.description });
+    } catch (error) {
+      // The model is optional. Without it routing still works from the reporter's
+      // categories and the narrative.
+      if (!(error instanceof ModelArtifactError)) throw error;
+    }
+  }
+  return suggestRouting({
+    reportedCategory: report.reportedCategory,
+    additionalCategories: report.additionalCategories,
+    title: report.title,
+    description: report.description,
+    modelScores
+  }, { availableSlugs: await availableAgencySlugs() });
+}
+
+// Builds the released case file for one referral. Only evidence that belongs to
+// this report can be released; every item defaults to NOT released.
+function buildReleasedEvidence(report, evidenceIds) {
+  const ids = Array.isArray(evidenceIds) ? evidenceIds.map(String) : [];
+  const released = report.evidence
+    .filter((item) => ids.includes(item._id.toString()))
+    .map((item) => ({ evidenceId: item._id, filename: item.filename, type: item.type, releasedAt: new Date() }));
+  return { ids, released, valid: ids.length === released.length };
+}
+
+const EVIDENCE_REVIEW_ERROR = 'Confirm that you have reviewed every file you are releasing before it goes to an agency.';
+
 // POST /api/reports/:id/refer - Reviewer/Admin refers a case to an Agency/Institution (decision #7).
+// A case can be referred to several agencies, each with its own case file; an agency
+// can hold only one active referral per case.
 router.post('/:id/refer', requireRole('reviewer', 'admin'), async (req, res) => {
   try {
     const {
-      agency, referenceNumber, notes, referralSummary, transferConfirmed,
+      agency, referenceNumber, notes, referralSummary, transferConfirmed, evidenceReviewed,
       // Case file packet. The reviewer explicitly selects what the receiving
       // agency may investigate. Defaults are all OFF so nothing sensitive is
       // shared by accident.
@@ -1005,7 +1139,7 @@ router.post('/:id/refer', requireRole('reviewer', 'admin'), async (req, res) => 
     const agencyInfo = AGENCIES.find((item) => item.name === agency);
     if (!agencyInfo) return res.status(400).json({ error: 'Select an agency from the approved list' });
     if (transferConfirmed !== true) {
-      return res.status(400).json({ error: 'Confirm the authorised recipient and that only necessary information is being shared' });
+      return res.status(400).json({ error: 'Confirm that you are authorised to share this case with the selected agency' });
     }
     if (typeof referralSummary !== 'string') return res.status(400).json({ error: 'A referral brief is required' });
     const cleanSummary = cleanText(referralSummary, 'Referral brief', 5000, false);
@@ -1028,51 +1162,32 @@ router.post('/:id/refer', requireRole('reviewer', 'admin'), async (req, res) => 
       return res.status(409).json({ error: 'This agency has no active, verified portal account. Complete partner onboarding before referral.' });
     }
 
-    const report = await findActiveReport(req.params.id);
-    if (!report) return res.status(404).json({ error: 'Report not found' });
-
-    const currentReferral = report.agencyReferral;
-    const sameAgency = currentReferral?.agency === agency;
-    const completingLegacyReferral = sameAgency && !currentReferral.referralSummary;
-    if (sameAgency && !completingLegacyReferral) {
-      return res.status(409).json({ error: 'This case is already referred to that agency. Transfer it only if the receiving agency has changed.' });
+    const report = selfCheck;
+    const existing = report.activeReferralFor(agency);
+    if (existing && existing.referralSummary) {
+      return res.status(409).json({ error: 'This case is already referred to that agency. Use the existing referral to adjust what it can see.' });
     }
-    const previousReferrals = currentReferral?.previousReferrals || [];
-    if (currentReferral?.agency && (!sameAgency || completingLegacyReferral)) {
-      for (const update of currentReferral.agencyUpdates || []) {
+    // An old referral with no structured brief cannot be used by the portal. It is
+    // closed out as history and replaced, keeping its earlier updates on record.
+    if (existing) {
+      for (const update of existing.agencyUpdates || []) {
         if (update.publicMessageStatus === 'pending') {
           update.publicMessageStatus = 'superseded';
           update.reviewedAt = new Date();
         }
       }
-      previousReferrals.push({
-        agency: currentReferral.agency,
-        referralSummary: currentReferral.referralSummary,
-        referenceNumber: currentReferral.referenceNumber,
-        notes: currentReferral.notes,
-        status: currentReferral.status,
-        referredAt: currentReferral.referredAt,
-        sentBy: currentReferral.sentBy,
-        sentByName: currentReferral.sentByName,
-        endedAt: new Date(),
-        agencyUpdates: currentReferral.agencyUpdates || []
-      });
+      existing.endedAt = new Date();
+      existing.endReason = 'withdrawn';
+      existing.endNote = 'Replaced by a structured referral.';
+      existing.endedBy = req.user._id;
     }
-    // Build the released case file. Only evidence that actually belongs to this
-    // report can be released, so a crafted request cannot expose another case's
-    // files. Reporter contact is only shared when explicitly ticked - the
-    // reporter's own consent choice is respected below.
-    const evidenceIds = Array.isArray(releaseEvidenceIds) ? releaseEvidenceIds.map(String) : [];
-    const releasedEvidence = report.evidence
-      .filter((item) => evidenceIds.includes(item._id.toString()))
-      .map((item) => ({
-        evidenceId: item._id,
-        filename: item.filename,
-        type: item.type,
-        releasedAt: new Date()
-      }));
-    if (evidenceIds.length !== releasedEvidence.length) {
+
+    const evidence = buildReleasedEvidence(report, releaseEvidenceIds);
+    if (!evidence.valid) {
       return res.status(400).json({ error: 'One or more selected evidence files do not belong to this report.' });
+    }
+    if (evidence.released.length > 0 && evidenceReviewed !== true) {
+      return res.status(400).json({ error: EVIDENCE_REVIEW_ERROR });
     }
     // Kenya Watch never holds a reporter's identity for anonymous reports, so
     // there is nothing to hand over. Contact details can only be released for a
@@ -1083,22 +1198,37 @@ router.post('/:id/refer', requireRole('reviewer', 'admin'), async (req, res) => 
     const reporterAllowsContact = Boolean(reporterAccount && reporterAccount.emailNotificationsOptIn);
     const releaseContact = releaseReporterContact === true && reporterAllowsContact;
 
-    report.agencyReferral = {
+    // Record what the routing aid suggested next to what the reviewer decided, so
+    // its usefulness can be measured. Failure here must never block a referral.
+    try {
+      const routing = await buildRouting(report, req.user);
+      const suggested = routing.agencies.filter((item) => item.recommended).map((item) => item.name);
+      report.routingFeedback.push({
+        reviewer: req.user._id,
+        suggested,
+        chosen: agency,
+        followedSuggestion: suggested.includes(agency),
+        modelUsed: routing.modelUsed
+      });
+    } catch (feedbackError) {
+      console.error('[routing] could not record routing feedback:', feedbackError.message);
+    }
+
+    report.agencyReferrals.push({
       agency,
       referralSummary: cleanSummary,
-      referenceNumber: cleanReference || (completingLegacyReferral ? currentReferral.referenceNumber : null),
-      notes: cleanNotes || (completingLegacyReferral ? currentReferral.notes : null),
+      referenceNumber: cleanReference || existing?.referenceNumber || null,
+      notes: cleanNotes || existing?.notes || null,
       status: 'sent',
       referredAt: new Date(),
       sentBy: req.user._id,
       sentByName: req.user.name,
-      previousReferrals,
       agencyUpdates: [],
       caseFile: {
         narrative: releaseNarrative === true ? report.description : null,
         categoryDetails: releaseCategoryDetails === true ? report.categorySpecificDetails : null,
         reporterContact: releaseContact,
-        evidence: releasedEvidence,
+        evidence: evidence.released,
         releasedAt: new Date(),
         releasedBy: req.user._id,
         releasedByName: req.user.name,
@@ -1106,7 +1236,7 @@ router.post('/:id/refer', requireRole('reviewer', 'admin'), async (req, res) => 
       },
       accessLog: [],
       informationRequests: []
-    };
+    });
     await report.save();
     return res.json(withSuggestedAgency(report, req.user));
   } catch (err) {
@@ -1114,32 +1244,165 @@ router.post('/:id/refer', requireRole('reviewer', 'admin'), async (req, res) => 
   }
 });
 
+function findReferral(report, referralId) {
+  if (!mongoose.Types.ObjectId.isValid(referralId)) return null;
+  return report.agencyReferrals.id(referralId);
+}
+
+// PATCH /api/reports/:id/referrals/:referralId/case-file - widen or narrow what
+// the receiving agency can see (for example after it asks for another file).
+// Narrowing takes effect immediately: a file no longer released can no longer be
+// downloaded.
+router.patch('/:id/referrals/:referralId/case-file', requireRole('reviewer', 'admin'), async (req, res) => {
+  try {
+    const report = await findActiveReport(req.params.id);
+    if (!report) return res.status(404).json({ error: 'Report not found' });
+    if (await isBlockedSelfReview(report, req.user)) return res.status(403).json({ error: SELF_REVIEW_ERROR });
+    const referral = findReferral(report, req.params.referralId);
+    if (!referral || referral.endedAt) return res.status(404).json({ error: 'Active referral not found' });
+    const { releaseNarrative, releaseCategoryDetails, releaseEvidenceIds, evidenceReviewed } = req.body || {};
+    const evidence = buildReleasedEvidence(report, releaseEvidenceIds);
+    if (!evidence.valid) return res.status(400).json({ error: 'One or more selected evidence files do not belong to this report.' });
+    const alreadyReleased = new Set((referral.caseFile?.evidence || []).map((item) => item.evidenceId.toString()));
+    const newlyReleased = evidence.released.filter((item) => !alreadyReleased.has(item.evidenceId.toString()));
+    if (newlyReleased.length > 0 && evidenceReviewed !== true) {
+      return res.status(400).json({ error: EVIDENCE_REVIEW_ERROR });
+    }
+    // Files that stay released keep their original release time.
+    const kept = (referral.caseFile?.evidence || []).filter((item) => evidence.ids.includes(item.evidenceId.toString()));
+    referral.caseFile.narrative = releaseNarrative === true ? report.description : null;
+    referral.caseFile.categoryDetails = releaseCategoryDetails === true ? report.categorySpecificDetails : null;
+    referral.caseFile.evidence = [...kept, ...newlyReleased];
+    referral.caseFile.lastUpdatedAt = new Date();
+    await report.save();
+    return res.json({ message: 'Case file updated for the receiving agency' });
+  } catch (err) {
+    console.error('[reviewer] case file update failed:', err.message);
+    return res.status(500).json({ error: 'Could not update the case file' });
+  }
+});
+
+// POST /api/reports/:id/referrals/:referralId/end - stop an agency's involvement
+// because the case was sent to the wrong place (transferred) or the referral is
+// being withdrawn. The record stays for the audit trail.
+router.post('/:id/referrals/:referralId/end', requireRole('reviewer', 'admin'), async (req, res) => {
+  try {
+    const { reason, note } = req.body || {};
+    if (!['transferred', 'withdrawn'].includes(reason)) {
+      return res.status(400).json({ error: 'Choose whether the referral was transferred or withdrawn' });
+    }
+    if (typeof note !== 'string' || note.trim().length < 10) {
+      return res.status(400).json({ error: 'Record why the referral is ending (at least 10 characters)' });
+    }
+    const report = await findActiveReport(req.params.id);
+    if (!report) return res.status(404).json({ error: 'Report not found' });
+    if (await isBlockedSelfReview(report, req.user)) return res.status(403).json({ error: SELF_REVIEW_ERROR });
+    const referral = findReferral(report, req.params.referralId);
+    if (!referral || referral.endedAt) return res.status(404).json({ error: 'Active referral not found' });
+    for (const update of referral.agencyUpdates || []) {
+      if (update.publicMessageStatus === 'pending') {
+        update.publicMessageStatus = 'superseded';
+        update.reviewedAt = new Date();
+      }
+    }
+    referral.endedAt = new Date();
+    referral.endReason = reason;
+    referral.endNote = note.trim().slice(0, 2000);
+    referral.endedBy = req.user._id;
+    await report.save();
+    return res.json({ message: 'Referral ended. The agency no longer sees this case.' });
+  } catch (err) {
+    console.error('[reviewer] ending referral failed:', err.message);
+    return res.status(500).json({ error: 'Could not end the referral' });
+  }
+});
+
+// POST /api/reports/:id/referrals/:referralId/reopen - Admin only. A closed
+// referral that was closed in error, or where new facts have emerged, returns to
+// review. The earlier outcome is kept in the referral's reopen history, and the
+// report leaves "Resolved" if that outcome was what resolved it.
+router.post('/:id/referrals/:referralId/reopen', requireRole('admin'), async (req, res) => {
+  try {
+    const { reason } = req.body || {};
+    if (typeof reason !== 'string' || reason.trim().length < 20) {
+      return res.status(400).json({ error: 'Record why the referral is being reopened (at least 20 characters)' });
+    }
+    const report = await findActiveReport(req.params.id);
+    if (!report) return res.status(404).json({ error: 'Report not found' });
+    const referral = findReferral(report, req.params.referralId);
+    if (!referral || referral.endedAt) return res.status(404).json({ error: 'Active referral not found' });
+    if (referral.status !== 'closed') return res.status(409).json({ error: 'Only a closed referral can be reopened' });
+
+    const cleanReason = reason.trim().slice(0, 2000);
+    referral.reopenHistory.push({
+      reopenedBy: req.user._id,
+      reopenedByName: req.user.name,
+      reason: cleanReason,
+      previousOutcome: referral.resolution?.outcome || null,
+      previousOutcomeReference: referral.resolution?.outcomeReference || null,
+      previousOutcomeSummary: referral.resolution?.outcomeSummary || null
+    });
+    referral.agencyUpdates.push({
+      note: `Reopened by Kenya Watch Admin: ${cleanReason}`,
+      status: 'under_review',
+      publicMessageStatus: 'none',
+      createdBy: req.user._id,
+      createdByName: req.user.name,
+      createdByEmail: req.user.email,
+      createdAt: new Date()
+    });
+    referral.status = 'under_review';
+    referral.resolution = {};
+    if (report.status === 'Resolved') {
+      report.status = 'In Review';
+      report.resolutionNote = null;
+      report.resolutionReference = null;
+      report.statusHistory.push({
+        status: 'In Review',
+        changedAt: new Date(),
+        changedBy: req.user._id,
+        note: `${referral.agency} referral reopened: ${cleanReason}`
+      });
+    }
+    await report.save();
+    return res.json({ message: 'Referral reopened for the agency' });
+  } catch (err) {
+    console.error('[admin] reopening referral failed:', err.message);
+    return res.status(500).json({ error: 'Could not reopen the referral' });
+  }
+});
+
 // GET /api/reports/:id/information-requests - open questions from the receiving
-// agency, shown in the reviewer workspace so they can be answered.
+// agencies, shown in the reviewer workspace so they can be answered.
 router.get('/:id/information-requests', requireRole('reviewer', 'admin'), async (req, res) => {
   try {
     const report = await findActiveReport(req.params.id);
     if (!report) return res.status(404).json({ error: 'Report not found' });
-    return res.json({
-      agency: report.agencyReferral?.agency || null,
-      requests: (report.agencyReferral?.informationRequests || []).map((item) => ({
-        _id: item._id,
-        question: item.question,
-        status: item.status,
-        requestedAt: item.requestedAt,
-        requestedByEmail: item.requestedByEmail,
-        answer: item.answer,
-        answeredAt: item.answeredAt,
-        answeredByEmail: item.answeredByEmail
-      }))
-    });
+    const requests = [];
+    for (const referral of report.activeReferrals()) {
+      for (const item of referral.informationRequests || []) {
+        requests.push({
+          _id: item._id,
+          referralId: referral._id,
+          agency: referral.agency,
+          question: item.question,
+          status: item.status,
+          requestedAt: item.requestedAt,
+          requestedByEmail: item.requestedByEmail,
+          answer: item.answer,
+          answeredAt: item.answeredAt,
+          answeredByEmail: item.answeredByEmail
+        });
+      }
+    }
+    return res.json({ requests });
   } catch (err) {
     return res.status(500).json({ error: 'Could not load information requests' });
   }
 });
 
 // POST /api/reports/:id/information-requests/:requestId/answer - the reviewer's
-// reply. It goes back to the agency's portal only; it is never shown publicly.
+// reply. It goes back to the asking agency's portal only; never shown publicly.
 router.post('/:id/information-requests/:requestId/answer', requireRole('reviewer', 'admin'), async (req, res) => {
   try {
     const { answer } = req.body || {};
@@ -1152,8 +1415,11 @@ router.post('/:id/information-requests/:requestId/answer', requireRole('reviewer
     const report = await findActiveReport(req.params.id);
     if (!report) return res.status(404).json({ error: 'Report not found' });
 
-    const request = (report.agencyReferral?.informationRequests || [])
-      .find((item) => item._id.toString() === req.params.requestId);
+    let request = null;
+    for (const referral of report.activeReferrals()) {
+      request = (referral.informationRequests || []).find((item) => item._id.toString() === req.params.requestId);
+      if (request) break;
+    }
     if (!request) return res.status(404).json({ error: 'Information request not found' });
     request.answer = answer.trim();
     request.status = 'answered';

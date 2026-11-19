@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import api from '../api';
 import { useAuth } from '../context/AuthContext';
 import EvidenceDownloads from '../components/EvidenceDownloads';
+import ReferralsPanel from '../components/ReferralsPanel';
 import usePolling from '../hooks/usePolling';
 
 function statusClass(status) {
@@ -19,45 +20,6 @@ function CaseDetail({ report, agencies, agenciesError, onChanged, isAdmin }) {
   const [resolutionNote, setResolutionNote] = useState(report.resolutionNote || '');
   const [resolutionReference, setResolutionReference] = useState(report.resolutionReference || '');
   const [rejectionReason, setRejectionReason] = useState(report.rejectionReason || '');
-  const [agency, setAgency] = useState(report.agencyReferral?.agency || report.suggestedAgency || '');
-  const [notes, setNotes] = useState(report.agencyReferral?.notes || '');
-  const [referralSummary, setReferralSummary] = useState('');
-  const [transferConfirmed, setTransferConfirmed] = useState(false);
-  // Case file packet - every item defaults to NOT released.
-  const [releaseNarrative, setReleaseNarrative] = useState(false);
-  const [releaseCategoryDetails, setReleaseCategoryDetails] = useState(false);
-  const [releaseEvidenceIds, setReleaseEvidenceIds] = useState([]);
-  const [releaseReporterContact, setReleaseReporterContact] = useState(false);
-  const [informationRequests, setInformationRequests] = useState([]);
-  const [answerDrafts, setAnswerDrafts] = useState({});
-
-  // Agency questions arrive while the reviewer is working, so poll them.
-  const loadInformationRequests = () => {
-    api.get(`/reports/${report._id}/information-requests`)
-      .then((res) => setInformationRequests(res.data.requests || []))
-      .catch(() => {});
-  };
-
-  useEffect(() => {
-    loadInformationRequests();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [report._id]);
-
-  const submitAnswer = async (requestId) => {
-    setBusy(true);
-    setError('');
-    try {
-      await api.post(`/reports/${report._id}/information-requests/${requestId}/answer`, {
-        answer: answerDrafts[requestId] || ''
-      });
-      setAnswerDrafts({ ...answerDrafts, [requestId]: '' });
-      loadInformationRequests();
-    } catch (err) {
-      setError(err.response?.data?.error || err.message);
-    } finally {
-      setBusy(false);
-    }
-  };
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [suggestions, setSuggestions] = useState([]);
@@ -214,48 +176,6 @@ function CaseDetail({ report, agencies, agenciesError, onChanged, isAdmin }) {
       setError(err.response?.data?.error || err.message);
     }
     setBusy(false);
-  };
-
-  const handleRefer = async (e) => {
-    e.preventDefault();
-    setBusy(true);
-    setError('');
-    try {
-      const res = await api.post(`/reports/${report._id}/refer`, {
-        agency,
-        notes,
-        referralSummary,
-        transferConfirmed,
-        releaseNarrative,
-        releaseCategoryDetails,
-        releaseEvidenceIds,
-        releaseReporterContact
-      });
-      onChanged(res.data);
-      setReferralSummary('');
-      setTransferConfirmed(false);
-      setReleaseNarrative(false);
-      setReleaseCategoryDetails(false);
-      setReleaseEvidenceIds([]);
-      setReleaseReporterContact(false);
-    } catch (err) {
-      setError(err.response?.data?.error || err.message);
-    }
-    setBusy(false);
-  };
-
-  const handlePublicMessageReview = async (updateId, decision) => {
-    setBusy(true);
-    setError('');
-    try {
-      await api.patch(`/agency-portal/cases/${report._id}/updates/${updateId}/review`, { decision });
-      const res = await api.get(`/reports/${report._id}`);
-      onChanged(res.data);
-    } catch (err) {
-      setError(err.response?.data?.error || err.message);
-    } finally {
-      setBusy(false);
-    }
   };
 
   const handleArchive = async () => {
@@ -477,231 +397,13 @@ function CaseDetail({ report, agencies, agenciesError, onChanged, isAdmin }) {
         <button type="submit" className="kw-btn" disabled={busy}>Save Status</button>
       </form>
 
-      <form className="kw-pro-form kw-case-form" onSubmit={handleRefer}>
-        <h4>Prepare secure agency referral</h4>
-        <div className="kw-helper">
-          Saving delivers this brief to the selected agency's verified Kenya Watch accounts. Proceed only when a formal
-          partner agreement and authorised receiving contact are in place. Below, choose exactly which case material the
-          agency needs to investigate — nothing is released unless you tick it, and every file they open is logged.
-        </div>
-        <div className="kw-form-section">
-          <label htmlFor={`agency-${report._id}`}>Agency</label>
-          {agencies.length === 0 && (
-            <div className="kw-helper" role={agenciesError ? 'alert' : undefined}>
-              {agenciesError || 'No active agency partner account is available. Ask an Admin to complete partner onboarding first.'}
-            </div>
-          )}
-          <select id={`agency-${report._id}`} value={agency} onChange={(e) => setAgency(e.target.value)}>
-            <option value="">Select agency...</option>
-            {agencies.map((a) => <option key={a.name} value={a.name}>{a.name}</option>)}
-          </select>
-        </div>
-        <div className="kw-form-section">
-          <label htmlFor={`referral-summary-${report._id}`}>Referral brief (shared with agency, at least 40 characters)</label>
-          <textarea id={`referral-summary-${report._id}`} minLength={40} maxLength={5000} value={referralSummary} onChange={(e) => setReferralSummary(e.target.value)} required />
-        </div>
-        <div className="kw-form-section">
-          <label htmlFor={`referral-notes-${report._id}`}>Internal liaison note (not shared with agency)</label>
-          <input id={`referral-notes-${report._id}`} maxLength={2000} value={notes} onChange={(e) => setNotes(e.target.value)} />
-        </div>
-        <fieldset className="kw-casefile-release">
-          <legend>Case file to release to the agency</legend>
-          <div className="kw-helper">
-            An investigating officer cannot act on a summary alone. Release only what that institution legally needs and
-            is authorised to hold. The reporter's identity is never available to release.
-          </div>
-
-          <label className="kw-release-option">
-            <input
-              type="checkbox"
-              checked={releaseNarrative}
-              onChange={(e) => setReleaseNarrative(e.target.checked)}
-            />
-            <span>
-              <strong>The complaint narrative</strong>
-              <small>The description the reporter wrote. Needed for almost any real investigation.</small>
-            </span>
-          </label>
-
-          {Object.keys(report.categorySpecificDetails || {}).length > 0 && (
-            <label className="kw-release-option">
-              <input
-                type="checkbox"
-                checked={releaseCategoryDetails}
-                onChange={(e) => setReleaseCategoryDetails(e.target.checked)}
-              />
-              <span>
-                <strong>Category-specific details</strong>
-                <small>The structured answers given for this category (figures, officials, dates).</small>
-              </span>
-            </label>
-          )}
-
-          {(report.evidence || []).length > 0 && (
-            <div className="kw-release-evidence">
-              <strong>Evidence files ({report.evidence.length} attached)</strong>
-              <div className="kw-helper">
-                Every released file is downloadable only by that agency's verified officers, and each download is recorded.
-              </div>
-              {(report.evidence || []).map((item) => (
-                <label key={item.id} className="kw-release-option">
-                  <input
-                    type="checkbox"
-                    checked={releaseEvidenceIds.includes(item.id)}
-                    onChange={(e) => setReleaseEvidenceIds((current) => (
-                      e.target.checked
-                        ? [...current, item.id]
-                        : current.filter((id) => id !== item.id)
-                    ))}
-                  />
-                  <span>
-                    <strong>{item.filename}</strong>
-                    <small>{item.type} · uploaded {item.uploadedAt ? new Date(item.uploadedAt).toLocaleDateString() : 'earlier'}</small>
-                  </span>
-                </label>
-              ))}
-            </div>
-          )}
-
-          <label className="kw-release-option">
-            <input
-              type="checkbox"
-              checked={releaseReporterContact}
-              onChange={(e) => setReleaseReporterContact(e.target.checked)}
-            />
-            <span>
-              <strong>Ask Kenya Watch to contact the reporter for more information</strong>
-              <small>
-                Only applies where the reporter is a registered citizen who opted in to being contacted. Kenya Watch
-                never passes on identity for anonymous reports — the agency asks us and we follow up.
-              </small>
-            </span>
-          </label>
-        </fieldset>
-
-        <div className="kw-form-section">
-          <label>
-            <input type="checkbox" checked={transferConfirmed} onChange={(e) => setTransferConfirmed(e.target.checked)} required />
-            I confirmed the official receiving contact, authority to share this material, and that only the minimum information required for follow-up is being released.
-          </label>
-        </div>
-        {agency === report.agencyReferral?.agency && report.agencyReferral?.referralSummary && (
-          <div className="kw-helper">This case is already assigned to this agency. Select a different approved recipient only when a formal transfer is required.</div>
-        )}
-        {agency === report.agencyReferral?.agency && !report.agencyReferral?.referralSummary && (
-          <div className="kw-helper">This is a legacy referral without a structured sharing brief. Submitting a reviewed brief will archive the old handoff in history and create a secure portal referral.</div>
-        )}
-        <button
-          type="submit"
-          className="kw-btn kw-btn-secondary"
-          disabled={
-            busy ||
-            !agency ||
-            !transferConfirmed ||
-            referralSummary.trim().length < 40 ||
-            agencies.length === 0 ||
-            (agency === report.agencyReferral?.agency && !!report.agencyReferral?.referralSummary)
-          }
-        >
-          {agency === report.agencyReferral?.agency && !report.agencyReferral?.referralSummary ? 'Create Structured Referral' : 'Send Secure Referral'}
-        </button>
-      </form>
-
-      {informationRequests.length > 0 && (
-        <div className="kw-info-requests" aria-label="Questions from the receiving agency">
-          <h4>Questions from {report.agencyReferral?.agency || 'the agency'}</h4>
-          <div className="kw-helper">
-            The investigating officer needs more information to proceed. Your answer goes back to that agency's
-            portal only — it is never published to the public case list.
-          </div>
-          {informationRequests.map((request) => (
-            <article key={request._id} className="kw-info-request">
-              <div className="kw-info-question">{request.question}</div>
-              <div className="kw-helper">
-                Asked by {request.requestedByEmail} · {new Date(request.requestedAt).toLocaleString()}
-              </div>
-              {request.status === 'answered' ? (
-                <div className="kw-info-answer">
-                  <b>Your answer:</b> {request.answer}
-                  <div className="kw-helper">Answered {new Date(request.answeredAt).toLocaleString()}</div>
-                </div>
-              ) : (
-                <div className="kw-form-section">
-                  <label htmlFor={`answer-${request._id}`}>Answer</label>
-                  <textarea
-                    id={`answer-${request._id}`}
-                    rows={3}
-                    maxLength={5000}
-                    value={answerDrafts[request._id] || ''}
-                    onChange={(e) => setAnswerDrafts({ ...answerDrafts, [request._id]: e.target.value })}
-                  />
-                  <button
-                    type="button"
-                    className="kw-btn kw-btn-secondary"
-                    disabled={busy || (answerDrafts[request._id] || '').trim().length < 5}
-                    onClick={() => submitAnswer(request._id)}
-                  >
-                    Send answer to agency
-                  </button>
-                </div>
-              )}
-            </article>
-          ))}
-        </div>
-      )}
-
-      {report.agencyReferral?.agency && (
-        <section className="kw-case-form kw-pro-form" aria-label="Current agency handoff">
-          <h4>Current agency handoff</h4>
-          <div className="kw-pro-meta"><b>Agency:</b> {report.agencyReferral.agency}</div>
-          <div className="kw-pro-meta"><b>Recorded:</b> {report.agencyReferral.referredAt ? new Date(report.agencyReferral.referredAt).toLocaleString() : 'Date not recorded'}</div>
-          <div className="kw-pro-meta"><b>Referral status:</b> {(report.agencyReferral.status || 'sent').replaceAll('_', ' ')}</div>
-          <div className="kw-pro-meta"><b>Shared brief:</b> {report.agencyReferral.referralSummary || 'Not recorded'}</div>
-          <div className="kw-pro-meta"><b>Agency reference:</b> {report.agencyReferral.referenceNumber || 'Not yet provided'}</div>
-          <div className="kw-pro-meta"><b>Internal liaison note:</b> {report.agencyReferral.notes || 'None'}</div>
-          <div className="kw-pro-meta"><b>Agency updates:</b> {report.agencyReferral.agencyUpdates?.length || 0}</div>
-          {report.agencyReferral.agencyUpdates?.map((update, index) => (
-            <div className="kw-pro-meta" key={`${update.createdAt}-${index}`}>
-              <b>{update.createdByName || 'Agency officer'}</b> · {new Date(update.createdAt).toLocaleString()} · {(update.status || 'update').replaceAll('_', ' ')}
-              <div>{update.note}</div>
-              {update.publicMessage && (
-                <div className="kw-pro-form">
-                  <b>Proposed reporter message</b> ({update.publicMessageStatus})
-                  <div>{update.publicMessage}</div>
-                  {isAdmin && update.publicMessageStatus === 'pending' && (
-                    <>
-                      <button type="button" className="kw-btn kw-btn-secondary" disabled={busy} onClick={() => handlePublicMessageReview(update._id, 'approved')}>Approve for reporter</button>
-                      <button type="button" className="kw-btn kw-btn-secondary" disabled={busy} onClick={() => handlePublicMessageReview(update._id, 'rejected')}>Reject</button>
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-          ))}
-          {report.agencyReferral.previousReferrals?.length > 0 && (
-            <details>
-              <summary>Previous agency handoffs ({report.agencyReferral.previousReferrals.length})</summary>
-              <ul>
-                {report.agencyReferral.previousReferrals.map((referral, index) => (
-                  <li key={`${referral.agency}-${referral.endedAt}-${index}`}>
-                    <b>{referral.agency}</b> — {referral.referenceNumber || 'No agency reference'}; status {referral.status || 'unknown'}; ended{' '}
-                    {referral.endedAt ? new Date(referral.endedAt).toLocaleString() : 'date not recorded'}
-                    {referral.agencyUpdates?.length > 0 && (
-                      <ul>
-                        {referral.agencyUpdates.map((update, updateIndex) => (
-                          <li key={`${update.createdAt}-${updateIndex}`}>
-                            {new Date(update.createdAt).toLocaleString()} — {update.note}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </details>
-          )}
-        </section>
-      )}
+      <ReferralsPanel
+        report={report}
+        agencies={agencies}
+        agenciesError={agenciesError}
+        isAdmin={isAdmin}
+        onChanged={onChanged}
+      />
 
       {categoryReview?.ownDecision === 'category' && (
         <section className="kw-case-form kw-pro-form" aria-label="Experimental ML category suggestion">
@@ -890,7 +592,7 @@ function ReviewerQueue() {
             )}
             {r.openInformationRequests > 0 && (
               <div className="kw-own-case-badge" role="status">
-                {r.agencyReferral?.agency || 'The receiving agency'} is waiting for your answer
+                A receiving agency is waiting for your answer
                 ({r.openInformationRequests} open {r.openInformationRequests === 1 ? 'question' : 'questions'}). Open the case to reply.
               </div>
             )}

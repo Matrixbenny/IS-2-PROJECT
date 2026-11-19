@@ -136,7 +136,20 @@ function vectorize(counts, vectorizer, offset) {
   return vector.map(([index, value]) => [index, value / norm]);
 }
 
-function classifyText({ title, description }, model = loadModel()) {
+// Relative per-category scores (softmax of the model's decision values). They
+// rank the categories against each other for one report; they are NOT calibrated
+// probabilities and say nothing about real-world accuracy.
+function scoreCategories({ title, description }, model = loadModel()) {
+  const decisions = decisionValues({ title, description }, model);
+  const max = Math.max(...decisions);
+  const exps = decisions.map((value) => Math.exp(value - max));
+  const total = exps.reduce((sum, value) => sum + value, 0);
+  return model.categories
+    .map((category, index) => ({ category, score: exps[index] / total }))
+    .sort((a, b) => b.score - a.score);
+}
+
+function decisionValues({ title, description }, model) {
   // Apply the same Kenya-lingo expansion used at training-data export time
   // (ml/scripts/export-reviewed-dataset.js), so Sheng/Kiswahili/dialect and
   // mixed-language narratives are scored in the vocabulary the model knows.
@@ -150,17 +163,17 @@ function classifyText({ title, description }, model = loadModel()) {
     features.push(...vectorize(charNgrams(fullText, char.ngramRange[0], char.ngramRange[1]), char, word.idf.length));
   }
 
+  return model.categories.map((_, categoryIndex) => features.reduce(
+    (total, [featureIndex, value]) => total + model.weights[categoryIndex][featureIndex] * value,
+    model.intercepts[categoryIndex]
+  ));
+}
+
+function classifyText({ title, description }, model = loadModel()) {
+  const decisions = decisionValues({ title, description }, model);
   let bestIndex = 0;
-  let bestScore = Number.NEGATIVE_INFINITY;
-  for (let categoryIndex = 0; categoryIndex < model.categories.length; categoryIndex += 1) {
-    const score = features.reduce(
-      (total, [featureIndex, value]) => total + model.weights[categoryIndex][featureIndex] * value,
-      model.intercepts[categoryIndex]
-    );
-    if (score > bestScore) {
-      bestScore = score;
-      bestIndex = categoryIndex;
-    }
+  for (let index = 1; index < decisions.length; index += 1) {
+    if (decisions[index] > decisions[bestIndex]) bestIndex = index;
   }
 
   return {
@@ -171,4 +184,4 @@ function classifyText({ title, description }, model = loadModel()) {
   };
 }
 
-module.exports = { ModelArtifactError, classifyText, hasIndependentCategoryAssessment, loadModel };
+module.exports = { ModelArtifactError, classifyText, scoreCategories, hasIndependentCategoryAssessment, loadModel };

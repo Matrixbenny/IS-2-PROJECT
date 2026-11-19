@@ -334,13 +334,15 @@ test('reviewer submits a minimum-data agency referral only after confirming auth
   });
   api.post.mockImplementation((path, body) => {
     expect(path).toBe('/reports/case-1/refer');
-    expect(body).toEqual({
+    expect(body).toMatchObject({
       agency: 'Ethics and Anti-Corruption Commission (EACC)',
       notes: '',
       referralSummary: 'A minimized brief describing the reviewed allegation and requested follow-up.',
-      transferConfirmed: true
+      transferConfirmed: true,
+      releaseNarrative: false,
+      releaseEvidenceIds: []
     });
-    return Promise.resolve({ data: { ...report, agencyReferral: { agency: body.agency } } });
+    return Promise.resolve({ data: { ...report, agencyReferrals: [{ _id: 'ref-1', agency: body.agency, status: 'sent' }] } });
   });
 
   render(
@@ -368,4 +370,52 @@ test('reviewer submits a minimum-data agency referral only after confirming auth
   fireEvent.click(screen.getByRole('button', { name: 'Send Secure Referral' }));
 
   await waitFor(() => expect(api.post).toHaveBeenCalledTimes(1));
+  expect(await screen.findByRole('region', { name: 'Referral to Ethics and Anti-Corruption Commission (EACC)' })).toBeInTheDocument();
+});
+
+test('suggests several agencies for a mixed case and prepares the chosen referral', async () => {
+  const eacc = 'Ethics and Anti-Corruption Commission (EACC)';
+  const dci = 'Directorate of Criminal Investigations (DCI)';
+  api.get.mockImplementation((path) => {
+    if (path === '/reports/queue') return Promise.resolve({ data: [report] });
+    if (path === '/reports/agencies') {
+      return Promise.resolve({ data: { agencies: [{ name: eacc, slug: 'eacc' }, { name: dci, slug: 'dci' }] } });
+    }
+    if (path === '/reports/case-1/category-review') return Promise.resolve({ data: categoryReview });
+    if (path === '/reports/categories') return Promise.resolve({ data: { categories: ['Bribery'] } });
+    if (path === '/reports/case-1/related-suggestions') return Promise.resolve({ data: [] });
+    if (path === '/reports/case-1/routing-suggestion') {
+      return Promise.resolve({
+        data: {
+          disclaimer: 'Routing suggestions are an aid, not a jurisdiction decision.',
+          multiAgency: true,
+          categories: [
+            { category: 'Bribery', sources: ['selected by the reporter'] },
+            { category: 'Fraud/Forgery of Documents', sources: ['also flagged by the reporter'] }
+          ],
+          agencies: [
+            { name: eacc, role: 'investigator', stage: 'intake', recommended: true, available: true, reasons: ['Bribery (selected by the reporter)'], note: null },
+            { name: dci, role: 'investigator', stage: 'intake', recommended: true, available: true, reasons: ['Fraud/Forgery of Documents (also flagged by the reporter)'], note: null },
+            { name: 'Office of the Director of Public Prosecutions (ODPP)', role: 'prosecutor', stage: 'follow_on', recommended: false, available: false, reasons: ['Bribery (selected by the reporter)'], note: 'Decides on prosecution after an investigating agency completes its file.' }
+          ]
+        }
+      });
+    }
+    return Promise.reject(new Error(`Unexpected request: ${path}`));
+  });
+
+  render(
+    <MemoryRouter initialEntries={[{ pathname: '/reviewer-queue', state: { focusReportId: 'case-1' } }]}>
+      <Routes>
+        <Route path="/reviewer-queue" element={<ReviewerQueue />} />
+      </Routes>
+    </MemoryRouter>
+  );
+
+  expect(await screen.findByText(/more than one kind of wrongdoing, so more than one institution is recommended/)).toBeInTheDocument();
+  expect(screen.getAllByText('Recommended')).toHaveLength(2);
+  expect(screen.getByText(/No active portal account yet/)).toBeInTheDocument();
+
+  fireEvent.click(screen.getAllByRole('button', { name: 'Prepare referral to this agency' })[1]);
+  expect(screen.getByLabelText('Agency')).toHaveValue(dci);
 });

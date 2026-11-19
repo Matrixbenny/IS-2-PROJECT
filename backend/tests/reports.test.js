@@ -112,7 +112,7 @@ test('GET /api/reports/admin-overview returns exact database counts and is Admin
       subCounty: 'Westlands',
       status: 'In Review',
       classification: { urgency: 'Critical', classifiedAt: new Date(Date.now() - 60 * 60 * 1000) },
-      agencyReferral: {
+      agencyReferrals: [{
         agency: 'Ethics and Anti-Corruption Commission (EACC)',
         referenceNumber: 'EACC-TEST-1',
         referredAt: new Date(),
@@ -121,7 +121,7 @@ test('GET /api/reports/admin-overview returns exact database counts and is Admin
           publicMessage: 'A reporter message awaiting moderation.',
           publicMessageStatus: 'pending'
         }]
-      }
+      }]
     },
     {
       trackingReference: 'KW-OVRHI1',
@@ -242,7 +242,8 @@ test('GET /api/reports/admin-overview returns exact database counts and is Admin
     .send({ agency: 'Not a configured agency' });
   assert.strictEqual(invalidAgency.status, 400);
 
-  const updatedReferral = await request(app)
+  // A case can be referred to several agencies at once; the first stays active.
+  const secondReferral = await request(app)
     .post(`/api/reports/${attentionCases[0]._id}/refer`)
     .set('Cookie', adminCookie)
     .send({
@@ -252,12 +253,13 @@ test('GET /api/reports/admin-overview returns exact database counts and is Admin
       referralSummary: 'A verified and minimal summary for the receiving agency to assess and follow up on the reported matter.',
       transferConfirmed: true
     });
-  assert.strictEqual(updatedReferral.status, 200);
-  assert.strictEqual(updatedReferral.body.agencyReferral.agencyUpdates.length, 0);
-  assert.strictEqual(updatedReferral.body.agencyReferral.referenceNumber, 'DCI-TEST-2');
-  assert.strictEqual(updatedReferral.body.agencyReferral.previousReferrals[0].agency, AGENCIES[0].name);
-  assert.strictEqual(updatedReferral.body.agencyReferral.previousReferrals[0].agencyUpdates.length, 1);
-  assert.strictEqual(updatedReferral.body.agencyReferral.previousReferrals[0].agencyUpdates[0].publicMessageStatus, 'superseded');
+  assert.strictEqual(secondReferral.status, 200);
+  const activeNow = secondReferral.body.agencyReferrals.filter((item) => !item.endedAt);
+  assert.deepStrictEqual(activeNow.map((item) => item.agency), [AGENCIES[0].name, AGENCIES[1].name]);
+  const dci = activeNow.find((item) => item.agency === AGENCIES[1].name);
+  assert.strictEqual(dci.agencyUpdates.length, 0);
+  assert.strictEqual(dci.referenceNumber, 'DCI-TEST-2');
+  assert.strictEqual(secondReferral.body.routingFeedback.length, 1);
 
   const duplicateReferral = await request(app)
     .post(`/api/reports/${attentionCases[0]._id}/refer`)
@@ -269,18 +271,19 @@ test('GET /api/reports/admin-overview returns exact database counts and is Admin
     });
   assert.strictEqual(duplicateReferral.status, 409);
 
-  const transferredReferral = await request(app)
-    .post(`/api/reports/${attentionCases[0]._id}/refer`)
+  // Ending the first referral (sent to the wrong place) keeps it as history and
+  // withdraws its unreviewed reporter message.
+  const eacc = activeNow.find((item) => item.agency === AGENCIES[0].name);
+  const ended = await request(app)
+    .post(`/api/reports/${attentionCases[0]._id}/referrals/${eacc._id}/end`)
     .set('Cookie', adminCookie)
-    .send({
-      agency: AGENCIES[0].name,
-      referralSummary: 'A new receiving agency has a documented reason to receive this minimal case brief.',
-      transferConfirmed: true
-    });
-  assert.strictEqual(transferredReferral.status, 200);
-  assert.strictEqual(transferredReferral.body.agencyReferral.agencyUpdates.length, 0);
-  assert.strictEqual(transferredReferral.body.agencyReferral.previousReferrals.length, 2);
-  assert.strictEqual(transferredReferral.body.agencyReferral.previousReferrals[0].agencyUpdates.length, 1);
+    .send({ reason: 'transferred', note: 'Better handled by the DCI.' });
+  assert.strictEqual(ended.status, 200);
+  const afterEnd = await Report.findById(attentionCases[0]._id);
+  assert.deepStrictEqual(afterEnd.activeReferrals().map((item) => item.agency), [AGENCIES[1].name]);
+  const endedEacc = afterEnd.agencyReferrals.find((item) => item.agency === AGENCIES[0].name);
+  assert.strictEqual(endedEacc.endReason, 'transferred');
+  assert.strictEqual(endedEacc.agencyUpdates[0].publicMessageStatus, 'superseded');
 
   const legacyReferral = await Report.create({
     trackingReference: 'KW-LEGACY1',
@@ -289,10 +292,10 @@ test('GET /api/reports/admin-overview returns exact database counts and is Admin
     description: 'An old demo referral must be deliberately prepared before portal access.',
     county: 'Nairobi',
     subCounty: 'Westlands',
-    agencyReferral: {
+    agencyReferrals: [{
       agency: AGENCIES[0].name,
       agencyUpdates: [{ note: 'Earlier demo update.' }]
-    }
+    }]
   });
   const upgradedLegacyReferral = await request(app)
     .post(`/api/reports/${legacyReferral._id}/refer`)
@@ -303,8 +306,43 @@ test('GET /api/reports/admin-overview returns exact database counts and is Admin
       transferConfirmed: true
     });
   assert.strictEqual(upgradedLegacyReferral.status, 200);
-  assert.strictEqual(upgradedLegacyReferral.body.agencyReferral.referralSummary.length > 40, true);
-  assert.strictEqual(upgradedLegacyReferral.body.agencyReferral.previousReferrals[0].agencyUpdates[0].note, 'Earlier demo update.');
+  const [oldEntry, newEntry] = upgradedLegacyReferral.body.agencyReferrals;
+  assert.ok(oldEntry.endedAt);
+  assert.strictEqual(oldEntry.agencyUpdates[0].note, 'Earlier demo update.');
+  assert.strictEqual(newEntry.referralSummary.length > 40, true);
+  assert.strictEqual(newEntry.endedAt, null);
+});
+
+test('POST /api/reports records additional wrongdoing types and rejects invalid ones', async () => {
+  const base = {
+    title: 'Bribe to hide missing funds',
+    reportedCategory: 'Bribery',
+    description: 'A finance officer was paid to hide funds that went missing from the ward account.',
+    county: 'Nairobi',
+    subCounty: 'Westlands'
+  };
+  const ok = await request(app).post('/api/reports').send({
+    ...base,
+    // The main category and "Other" are dropped; duplicates collapse.
+    additionalCategories: JSON.stringify(['Embezzlement', 'Embezzlement', 'Bribery', 'Other']),
+    ...(await solvedCaptcha())
+  });
+  assert.strictEqual(ok.status, 201, JSON.stringify(ok.body));
+  assert.deepStrictEqual((await Report.findById(ok.body.reportId)).additionalCategories, ['Embezzlement']);
+
+  const invalid = await request(app).post('/api/reports').send({
+    ...base,
+    additionalCategories: JSON.stringify(['Not a category']),
+    ...(await solvedCaptcha())
+  });
+  assert.strictEqual(invalid.status, 400);
+
+  const tooMany = await request(app).post('/api/reports').send({
+    ...base,
+    additionalCategories: JSON.stringify(['Embezzlement', 'Procurement Fraud', 'Extortion', 'Nepotism/Favoritism']),
+    ...(await solvedCaptcha())
+  });
+  assert.strictEqual(tooMany.status, 400);
 });
 
 test('POST /api/reports rejects a submission missing required fields', async () => {

@@ -115,6 +115,7 @@ test('a reviewer releases a case file and the named officer receives exactly tha
       releaseNarrative: true,
       releaseCategoryDetails: true,
       releaseEvidenceIds: [report.evidence[0]._id.toString()],
+      evidenceReviewed: true,
       releaseReporterContact: true
     });
   assert.strictEqual(referral.status, 200, JSON.stringify(referral.body));
@@ -137,7 +138,7 @@ test('a reviewer releases a case file and the named officer receives exactly tha
   // Opening the released case file is logged once, however often the portal refreshes.
   await request(app).get('/api/agency-portal/cases').set('Cookie', officerCookie);
   const logged = await Report.findById(report._id);
-  const views = logged.agencyReferral.accessLog.filter((entry) => entry.action === 'view_case_file');
+  const views = logged.agencyReferrals[0].accessLog.filter((entry) => entry.action === 'view_case_file');
   assert.strictEqual(views.length, 1);
   assert.strictEqual(views[0].userEmail, 'casefile-officer@example.gov');
 });
@@ -170,7 +171,7 @@ test('only released evidence can be downloaded, only by the right agency, and ea
   assert.strictEqual(anonymous.status, 401);
 
   const saved = await Report.findById(report._id);
-  const downloads = saved.agencyReferral.accessLog.filter((entry) => entry.action === 'download_evidence');
+  const downloads = saved.agencyReferrals[0].accessLog.filter((entry) => entry.action === 'download_evidence');
   assert.strictEqual(downloads.length, 1);
   assert.strictEqual(downloads[0].filename, 'receipt.pdf');
 });
@@ -239,9 +240,9 @@ test('closing a case requires a real outcome, then resolves the citizen\'s repor
   const tracked = await request(app).get('/api/reports/track').query({ ref: 'KW-CASEF1', key: 'casefile-key' });
   assert.strictEqual(tracked.status, 200);
   assert.strictEqual(tracked.body.status, 'Resolved');
-  assert.strictEqual(tracked.body.agencyProgress.outcome, 'investigated_charged');
-  assert.match(tracked.body.agencyProgress.outcomeSummary, /charged with soliciting a bribe/);
-  assert.strictEqual(tracked.body.agencyProgress.legalBasis, 'ACECA 2003 section 39');
+  assert.strictEqual(tracked.body.agencyReferrals[0].outcome, 'investigated_charged');
+  assert.match(tracked.body.agencyReferrals[0].outcomeSummary, /charged with soliciting a bribe/);
+  assert.strictEqual(tracked.body.agencyReferrals[0].legalBasis, 'ACECA 2003 section 39');
 
   // The officer's own view keeps the recorded outcome and offers no further actions.
   const cases = await request(app).get('/api/agency-portal/cases').set('Cookie', officerCookie);
