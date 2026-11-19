@@ -93,6 +93,31 @@ const agencyReferralSchema = new mongoose.Schema({
   accessLog: [agencyAccessLogSchema],
   // Agency asks Kenya Watch for more information; the reviewer answers.
   informationRequests: [informationRequestSchema],
+  // How the receiving institution disposed of the case. This is what turns an
+  // investigation into an outcome the reporter is entitled to know about.
+  resolution: {
+    outcome: {
+      type: String,
+      // investigated_charged: files were charged in court (EACC/ODPP route).
+      // investigated_no_action: investigated, insufficient evidence to charge.
+      // referred_elsewhere: passed to another body with jurisdiction.
+      // administrative_action: disciplinary or administrative measures taken.
+      // not_pursued: outside the institution's mandate.
+      enum: ['investigated_charged', 'investigated_no_action', 'referred_elsewhere', 'administrative_action', 'not_pursued', null],
+      default: null
+    },
+    // Case or file number the institution opened (e.g. EACC/INV/2026/117).
+    outcomeReference: { type: String, default: null },
+    // Plain-language account the reporter can read without legal training.
+    outcomeSummary: { type: String, default: null },
+    // Legal basis relied on, e.g. sections charged under the Anti-Corruption and
+    // Economic Crimes Act 2003.
+    legalBasis: { type: String, default: null },
+    courtsInvolved: { type: String, default: null },
+    closedAt: { type: Date, default: null },
+    closedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    closedByEmail: { type: String, default: null }
+  },
   status: {
     type: String,
     enum: ['sent', 'acknowledged', 'under_review', 'information_requested', 'action_taken', 'closed'],
@@ -272,6 +297,12 @@ reportSchema.methods.toDeepTier = function toDeepTier() {
       agency: this.agencyReferral.agency,
       status: this.agencyReferral.status || 'sent',
       referredAt: this.agencyReferral.referredAt,
+      // The outcome the institution reached, in language the reporter can read.
+      outcome: this.agencyReferral.resolution?.outcome || null,
+      outcomeSummary: this.agencyReferral.resolution?.outcomeSummary || null,
+      outcomeReference: this.agencyReferral.resolution?.outcomeReference || null,
+      legalBasis: this.agencyReferral.resolution?.legalBasis || null,
+      closedAt: this.agencyReferral.resolution?.closedAt || null,
       updates: (this.agencyReferral.agencyUpdates || [])
         .filter((update) => update.publicMessageStatus === 'approved' && update.publicMessage)
         .map((update) => ({ message: update.publicMessage, createdAt: update.createdAt }))

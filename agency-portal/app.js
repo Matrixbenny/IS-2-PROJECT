@@ -273,6 +273,40 @@ function renderCases(cases) {
               <label for="message-${escapeHtml(item.id)}">Optional message for the reporter (max 500 characters)</label>
               <textarea id="message-${escapeHtml(item.id)}" name="publicMessage" maxlength="500"></textarea>
             </div>
+            <fieldset class="ap-resolution" data-resolution-for="${escapeHtml(item.id)}">
+              <legend>Required only when closing the case</legend>
+              <p class="ap-helper">
+                Closing ends the reporter's case on their tracking page, so record what the institution
+                actually decided. The reporter reads this — avoid internal jargon.
+              </p>
+              <div class="ap-field">
+                <label for="outcome-${escapeHtml(item.id)}">Outcome</label>
+                <select id="outcome-${escapeHtml(item.id)}" name="outcome">
+                  <option value="">Select the decision…</option>
+                  <option value="investigated_charged">Investigated and charges filed</option>
+                  <option value="investigated_no_action">Investigated, no charges filed</option>
+                  <option value="referred_elsewhere">Referred to another authority</option>
+                  <option value="administrative_action">Administrative action taken</option>
+                  <option value="not_pursued">Not pursued by this institution</option>
+                </select>
+              </div>
+              <div class="ap-field">
+                <label for="outcomeref-${escapeHtml(item.id)}">Institution case / file reference</label>
+                <input id="outcomeref-${escapeHtml(item.id)}" name="outcomeReference" maxlength="120" placeholder="e.g. EACC/INV/2026/117" />
+              </div>
+              <div class="ap-field">
+                <label for="legals-${escapeHtml(item.id)}">Legal basis (required if charges filed)</label>
+                <input id="legals-${escapeHtml(item.id)}" name="legalBasis" maxlength="200" placeholder="e.g. ACECA 2003 sections 39 and 42" />
+              </div>
+              <div class="ap-field">
+                <label for="court-${escapeHtml(item.id)}">Court involved (optional)</label>
+                <input id="court-${escapeHtml(item.id)}" name="courtsInvolved" maxlength="200" placeholder="e.g. Milimani Anti-Corruption Court" />
+              </div>
+              <div class="ap-field">
+                <label for="outcomesum-${escapeHtml(item.id)}">What happened, in plain language (min 30 characters)</label>
+                <textarea id="outcomesum-${escapeHtml(item.id)}" name="outcomeSummary" maxlength="2000" rows="3"></textarea>
+              </div>
+            </fieldset>
             <button type="submit">Submit update</button>
             <div class="ap-update-error ap-error" role="alert" hidden></div>
           </form>
@@ -322,7 +356,12 @@ function renderCases(cases) {
             status: formData.get('status'),
             referenceNumber: formData.get('referenceNumber'),
             note: formData.get('note'),
-            publicMessage: formData.get('publicMessage')
+            publicMessage: formData.get('publicMessage'),
+            outcome: formData.get('outcome') || undefined,
+            outcomeReference: formData.get('outcomeReference') || undefined,
+            outcomeSummary: formData.get('outcomeSummary') || undefined,
+            legalBasis: formData.get('legalBasis') || undefined,
+            courtsInvolved: formData.get('courtsInvolved') || undefined
           })
         }));
         await loadCases();

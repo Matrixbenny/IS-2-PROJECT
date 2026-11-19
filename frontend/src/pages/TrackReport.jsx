@@ -112,6 +112,28 @@ function TrackReport() {
           {report.agencyProgress && (
             <section aria-labelledby="agency-progress-heading">
               <h4 id="agency-progress-heading">Agency follow-up</h4>
+              {report.agencyProgress.outcome && (
+                <div className="kw-outcome-panel" role="status">
+                  <div className="kw-outcome-heading">
+                    <span className="kw-claimed-tick" aria-hidden="true">✓</span>
+                    <strong>Outcome from {report.agencyProgress.agency}</strong>
+                  </div>
+                  <p className="kw-outcome-label">
+                    {{ investigated_charged: 'Investigated and charges filed',
+                       investigated_no_action: 'Investigated, no charges filed',
+                       referred_elsewhere: 'Referred to another authority',
+                       administrative_action: 'Administrative action taken',
+                       not_pursued: 'Not pursued by this institution' }[report.agencyProgress.outcome]
+                      || report.agencyProgress.outcome}
+                  </p>
+                  <p className="kw-outcome-summary">{report.agencyProgress.outcomeSummary}</p>
+                  <div className="kw-pro-meta">
+                    {report.agencyProgress.outcomeReference && <div><b>Reference:</b> {report.agencyProgress.outcomeReference}</div>}
+                    {report.agencyProgress.legalBasis && <div><b>Legal basis:</b> {report.agencyProgress.legalBasis}</div>}
+                    {report.agencyProgress.closedAt && <div><b>Closed:</b> {new Date(report.agencyProgress.closedAt).toLocaleDateString()}</div>}
+                  </div>
+                </div>
+              )}
               <p className="kw-pro-meta">
                 Referred to {report.agencyProgress.agency} · {report.agencyProgress.status.replaceAll('_', ' ')}
               </p>

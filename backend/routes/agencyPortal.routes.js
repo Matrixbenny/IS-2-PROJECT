@@ -77,7 +77,7 @@ router.post('/cases/:id/updates', requireRole('agency'), async (req, res) => {
   try {
     const agency = AGENCIES.find((item) => slugify(item.name) === req.user.agencySlug);
     if (!agency) return res.status(403).json({ error: 'Your account has no valid agency assignment' });
-    const { note, status, publicMessage, referenceNumber } = req.body || {};
+    const { note, status, publicMessage, referenceNumber, outcome, outcomeReference, outcomeSummary, legalBasis, courtsInvolved } = req.body || {};
     if (typeof note !== 'string' || !note.trim()) return res.status(400).json({ error: 'A note is required' });
     const cleanNote = note.trim();
     if (cleanNote.length > 2000) return res.status(400).json({ error: 'An update must be 2000 characters or fewer' });
@@ -88,6 +88,37 @@ router.post('/cases/:id/updates', requireRole('agency'), async (req, res) => {
     }
     if (referenceNumber !== undefined && (typeof referenceNumber !== 'string' || referenceNumber.trim().length > 120)) {
       return res.status(400).json({ error: 'Agency reference must be text of 120 characters or fewer' });
+    }
+    // Closing is the moment the reporter has been waiting for. A case cannot be
+    // closed with only an internal note - the officer must record what the
+    // institution actually decided, in language the reporter can understand.
+    const VALID_OUTCOMES = [
+      'investigated_charged',
+      'investigated_no_action',
+      'referred_elsewhere',
+      'administrative_action',
+      'not_pursued'
+    ];
+    if (status === 'closed') {
+      if (!VALID_OUTCOMES.includes(outcome)) {
+        return res.status(400).json({ error: 'Record what the institution decided before closing the case' });
+      }
+      if (typeof outcomeSummary !== 'string' || outcomeSummary.trim().length < 30) {
+        return res.status(400).json({
+          error: 'Write a plain-language outcome for the reporter (at least 30 characters) explaining what happened and what it means'
+        });
+      }
+      if (outcomeSummary.trim().length > 2000) {
+        return res.status(400).json({ error: 'Keep the outcome summary to 2000 characters or fewer' });
+      }
+      if (typeof outcomeReference !== 'string' || !outcomeReference.trim()) {
+        return res.status(400).json({ error: 'Record the institution\'s case or file reference for this outcome' });
+      }
+      if (outcome === 'investigated_charged' && (typeof legalBasis !== 'string' || legalBasis.trim().length < 10)) {
+        return res.status(400).json({
+          error: 'When charges are filed, record the legal basis (for example the Act and sections relied on)'
+        });
+      }
     }
 
     const report = await Report.findOne({
@@ -123,6 +154,59 @@ router.post('/cases/:id/updates', requireRole('agency'), async (req, res) => {
       createdAt: new Date()
     });
     await report.save();
+
+    // --- Close the justice loop -------------------------------------------------
+    // Until now the citizen's case stayed "In Review" forever, even after the
+    // institution had finished. Closing the referral now resolves the report the
+    // reporter is tracking, records the outcome, and notifies them (if they opted
+    // in). This is the whole point of the platform: the reporter learns the
+    // result.
+    if (status === 'closed') {
+      const outcomeLabel = {
+        investigated_charged: 'Investigated and charges filed',
+        investigated_no_action: 'Investigated, no charges filed',
+        referred_elsewhere: 'Referred to another authority',
+        administrative_action: 'Administrative action taken',
+        not_pursued: 'Not pursued by this institution'
+      }[outcome];
+
+      report.agencyReferral.resolution = {
+        outcome,
+        outcomeReference: outcomeReference.trim(),
+        outcomeSummary: outcomeSummary.trim(),
+        legalBasis: typeof legalBasis === 'string' && legalBasis.trim() ? legalBasis.trim() : null,
+        courtsInvolved: typeof courtsInvolved === 'string' && courtsInvolved.trim() ? courtsInvolved.trim() : null,
+        closedAt: new Date(),
+        closedBy: req.user._id,
+        closedByEmail: req.user.email
+      };
+
+      // The institution's finding is the citizen's result. The report moves to
+      // Resolved so the public list and the reporter's own view both reflect it.
+      report.status = 'Resolved';
+      report.resolutionNote = outcomeSummary.trim();
+      report.resolutionReference = outcomeReference.trim();
+      report.statusHistory.push({
+        status: 'Resolved',
+        changedAt: new Date(),
+        changedBy: req.user._id,
+        note: `${report.agencyReferral.agency}: ${outcomeLabel}. ${outcomeSummary.trim()}`
+      });
+      await report.save();
+
+      notifyReporterOfStatusChange(report, {
+        status: 'Resolved',
+        resolutionNote: `${outcomeLabel} - ${outcomeSummary.trim()}`,
+        resolutionReference: outcomeReference.trim(),
+        rejectionReason: null
+      });
+
+      return res.status(201).json({
+        message: 'Case closed. The reporter\'s record now shows the outcome.',
+        resolved: true
+      });
+    }
+
     return res.status(201).json({ message: 'Update recorded and any reporter message queued for Admin review' });
   } catch (err) {
     console.error('[agency portal] could not record case update:', err.message);

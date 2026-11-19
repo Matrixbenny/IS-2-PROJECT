@@ -8,6 +8,7 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import ReviewerApplication from './pages/ReviewerApplication';
 import AgencyApplication from './pages/AgencyApplication';
+import Privacy from './pages/Privacy';
 import TrackReport from './pages/TrackReport';
 import MyReports from './pages/MyReports';
 import ReviewerQueue from './pages/ReviewerQueue';
@@ -149,6 +150,7 @@ function AppShell() {
             <NavLink to="/escalations" className="kw-nav-link">{t('nav_escalations')}</NavLink>
           )}
           <NavLink to="/about" className="kw-nav-link">{t('nav_about')}</NavLink>
+          <NavLink to="/privacy" className="kw-nav-link">{t('nav_privacy')}</NavLink>
         </nav>
         <InstallPrompt />
         <main id="main-content" tabIndex="-1">
@@ -164,6 +166,7 @@ function AppShell() {
             <Route path="/admin" element={<AdminDashboard />} />
             <Route path="/escalations" element={<Escalations />} />
             <Route path="/about" element={<About />} />
+            <Route path="/privacy" element={<Privacy />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             <Route path="/reviewer-application" element={<ReviewerApplication />} />

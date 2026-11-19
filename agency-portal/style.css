@@ -290,3 +290,20 @@ button {
   font-size: 0.92rem;
   line-height: 1.5;
 }
+
+/* ===== Case resolution (required when closing) ===== */
+.ap-resolution {
+  border: 1px solid #e6c9a8;
+  border-left: 4px solid var(--ap-maroon);
+  border-radius: 10px;
+  padding: 12px 14px 14px;
+  margin: 12px 0;
+  background: #fffaf3;
+}
+.ap-resolution legend {
+  font-weight: 700;
+  color: var(--ap-maroon-dark);
+  padding: 0 6px;
+  font-size: 0.92rem;
+}
+.ap-resolution .ap-field + .ap-field { margin-top: 10px; }

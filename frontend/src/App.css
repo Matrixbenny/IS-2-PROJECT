@@ -2480,3 +2480,40 @@ section.kw-page-card > h3,
   border-left: 3px solid #15803d;
   border-radius: 8px;
 }
+
+/* ===== Citizen outcome panel (the result of the investigation) ===== */
+.kw-outcome-panel {
+  margin: 14px 0;
+  padding: 16px 18px;
+  border: 1px solid #bbf7d0;
+  border-left: 5px solid var(--kw-green);
+  border-radius: 12px;
+  background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%);
+  color: #14532d;
+}
+.kw-outcome-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 1.02rem;
+  margin-bottom: 8px;
+}
+.kw-outcome-label {
+  margin: 0 0 8px;
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+.kw-outcome-summary {
+  margin: 0 0 10px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+/* ===== Privacy notice page ===== */
+.kw-privacy h3 {
+  margin: 22px 0 6px;
+  font-size: 1.05rem;
+  color: var(--kw-navy);
+}
+.kw-privacy ul { padding-left: 22px; line-height: 1.65; }
+.kw-privacy p { line-height: 1.65; }
