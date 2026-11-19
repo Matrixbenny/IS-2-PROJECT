@@ -3,6 +3,7 @@ import unittest
 
 from ml.lingo.evaluate_lingo import Normaliser, make_mixed, make_slang_only, split_lexicon, sms_noise
 from ml.lingo.fetch_corpora import licence_decision
+from ml.lingo.ingest_dictionary import parse_entries, split_entry
 
 CONFIG = {"allowed_licences": ["afl-3.0", "cc-by-sa-3.0", "cc-by-4.0"], "noncommercial_licences": []}
 
@@ -51,6 +52,22 @@ class BenchmarkIntegrityTests(unittest.TestCase):
         noisy = sms_noise("Karani alidai hongo kabla ya kunisaidia.", random.Random(2))
         self.assertTrue(noisy.islower())
         self.assertNotIn(".", noisy)
+
+
+class DictionaryIngestTests(unittest.TestCase):
+    SAMPLE = (
+        "honga to bribe; kuhonga.\n\n"
+        "iya to steal; kuiba. Mutu iya.\n\n"
+        "   tiya adabu punish; kuadhibu.\n"
+    )
+
+    def test_headwords_start_entries_and_indented_lines_join_them(self):
+        entries = parse_entries(self.SAMPLE)
+        self.assertEqual(len(entries), 2)
+        self.assertIn("punish", entries[1])
+
+    def test_entry_is_split_into_term_english_and_kiswahili(self):
+        self.assertEqual(split_entry("honga to bribe; kuhonga."), ("honga", "to bribe", "kuhonga"))
 
 
 if __name__ == "__main__":

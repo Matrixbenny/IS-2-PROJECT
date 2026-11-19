@@ -27,3 +27,6 @@ ml/data/processed/
 ml/artifacts/
 ml/models/
 ml/reports/
+
+# Third-party dictionary extracts used under permission: never commit or redistribute
+ml/data/lingo/

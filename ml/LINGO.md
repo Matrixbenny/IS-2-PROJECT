@@ -20,7 +20,8 @@ Replacements that are legal and already working:
 1. **Licence-verified open corpora** ([`lingo/sources.json`](lingo/sources.json), [`lingo/fetch_corpora.py`](lingo/fetch_corpora.py)). The fetcher asks the dataset's own metadata for its licence and refuses anything unlicensed or off the allowlist; every download is logged with source, licence, date, row count and SHA-256. Currently approved: MasakhaNEWS Swahili and English (AFL-3.0) and Swahili Wikipedia (CC BY-SA 3.0, chosen from its dual licence).
 2. **Mined vocabulary for human review** ([`lingo/mine_lexicon.py`](lingo/mine_lexicon.py)). Finds words that keep company with corruption terms in the corpus (log-likelihood score) and are not yet in the glossary, then writes a review CSV. Nothing is added automatically.
 3. **Reviewers teach the system from real use.** Reviewers suggest Sheng, Kiswahili or dialect terms in the Reviewer Queue; an Admin approves, edits or rejects each one; approved terms reach the normaliser immediately (triage, related-case matching and model input). Suggestions accept plain words only: no digits, links or names.
-4. **Measured robustness** ([`lingo/evaluate_lingo.py`](lingo/evaluate_lingo.py)).
+4. **Dictionaries used with written permission** ([`lingo/permissions.json`](lingo/permissions.json), [`lingo/ingest_dictionary.py`](lingo/ingest_dictionary.py)). Sheng, Kenyan-language and Digo dictionaries are copyrighted, so each is used only when its rights-holder's permission is recorded (date, scope, reference); an unregistered source is refused. The Digo-English-Swahili dictionary (BTL East Africa) yields a review CSV of crime and officialdom words for a Digo speaker to check; nothing reaches the glossary without Admin approval, and the extracted text is never committed or redistributed.
+5. **Measured robustness** ([`lingo/evaluate_lingo.py`](lingo/evaluate_lingo.py)).
 
 ## Measured result (synthetic, 5 incident-grouped folds)
 

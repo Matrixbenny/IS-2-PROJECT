@@ -1,0 +1,49 @@
+{
+  "_comment": "Sources used under the rights-holder's written permission rather than an open licence. Each entry must point at the permission (email, letter or agreement) so it can be shown to an examiner or auditor. Fill in 'reference' and 'granted_on' from the actual permission before relying on a source. Do not redistribute the source text; derived review CSVs stay inside ml/data (not committed).",
+  "permissions": [
+    {
+      "id": "btl-digo",
+      "name": "Digo-English-Swahili Dictionary (Mwalonya, Nicolle, Nicolle, Zimbu), BTL (East Africa), 2004/2005",
+      "url": "https://www.btlkenya.org/wp-content/uploads/2021/06/Digo-Dictionary-1.pdf",
+      "rights_holder": "BTL (East Africa) with the Digo Language and Literacy Project",
+      "language": "Digo",
+      "licence_on_document": "Copyright BTL (East Africa). All rights reserved; written permission required beyond short quotations.",
+      "permitted_use": "TO CONFIRM from the written permission",
+      "granted_on": "TO CONFIRM",
+      "reference": "TO CONFIRM (email/letter reference)"
+    },
+    {
+      "id": "lughayangu-sheng",
+      "name": "Lughayangu Sheng dictionary",
+      "url": "https://lughayangu.com/sheng",
+      "rights_holder": "Lughayangu",
+      "language": "Sheng",
+      "licence_on_document": "Terms of Service s.8: no bulk copying, bots or AI training without written permission; API by permission only.",
+      "permitted_use": "TO CONFIRM from the written permission",
+      "granted_on": "TO CONFIRM",
+      "reference": "TO CONFIRM (email/letter reference or API terms)"
+    },
+    {
+      "id": "kenyandictionary-ke",
+      "name": "Kenyan Dictionary (kenyandictionary.ke)",
+      "url": "https://kenyandictionary.ke/",
+      "rights_holder": "TO CONFIRM",
+      "language": "Kenyan languages",
+      "licence_on_document": "None found",
+      "permitted_use": "TO CONFIRM from the written permission",
+      "granted_on": "TO CONFIRM",
+      "reference": "TO CONFIRM"
+    },
+    {
+      "id": "kenyahub-translator",
+      "name": "KenyaHub Kenyan Languages Translator",
+      "url": "https://kenyahub.me/tools/kenyan-translator/",
+      "rights_holder": "KenyaHub",
+      "language": "Swahili and 22 other Kenyan languages",
+      "licence_on_document": "Terms: no automated scraping or bulk mirroring without written permission; robots.txt reserves AI training.",
+      "permitted_use": "TO CONFIRM from the written permission",
+      "granted_on": "TO CONFIRM",
+      "reference": "TO CONFIRM"
+    }
+  ]
+}
