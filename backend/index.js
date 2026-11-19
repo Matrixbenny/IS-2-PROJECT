@@ -5,6 +5,7 @@ const { warnIfAdminIdentityMisconfigured } = require('./utils/developerIdentity'
 const mailer = require('./utils/mailer');
 const sms = require('./utils/sms');
 const { migrateLegacyReferrals } = require('./utils/migrateReferrals');
+const { refreshApprovedTerms } = require('./utils/lingoGlossary');
 
 const app = createApp();
 const PORT = process.env.PORT || 5000;
@@ -22,6 +23,7 @@ if (sms.isSmsConfigured()) {
 
 connectDB()
   .then(() => migrateLegacyReferrals())
+  .then(() => refreshApprovedTerms())
   .then(() => {
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);

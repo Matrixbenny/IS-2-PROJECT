@@ -19,6 +19,8 @@ import ResetPassword from './pages/ResetPassword';
 import Escalations from './pages/Escalations';
 import ArchivedReports from './pages/ArchivedReports';
 import AdminDashboard from './pages/AdminDashboard';
+import Account from './pages/Account';
+import AnonymousAvatar from './components/AnonymousAvatar';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import api from './api';
@@ -95,6 +97,7 @@ function HeaderUser() {
   };
   return (
     <div className="kw-header-user">
+      <AnonymousAvatar seed={user.id || user.email || user.name} size={44} />
       <div>{t('signedInAs')} <strong>{user.name}</strong></div>
       <span className={`kw-role-badge kw-role-badge-${user.role}`}>{role.label}</span>
       <div className="kw-role-workspace">{role.workspace}</div>
@@ -137,6 +140,7 @@ function AppShell() {
           {user && ['reviewer', 'admin'].includes(user.role) && (
             <NavLink to="/reviewer-queue" className="kw-nav-link">{t('nav_reviewerQueue')}</NavLink>
           )}
+          {user && user.role !== 'user' && <NavLink to="/account" className="kw-nav-link">Account</NavLink>}
           {user && user.role === 'admin' && (
             <NavLink to="/admin" className="kw-nav-link">Admin overview</NavLink>
           )}
@@ -160,6 +164,7 @@ function AppShell() {
             <Route path="/track" element={<TrackReport />} />
             <Route path="/stats" element={<Stats />} />
             <Route path="/my-reports" element={<MyReports />} />
+            <Route path="/account" element={<Account />} />
             <Route path="/reviewer-queue" element={<ReviewerQueue />} />
             <Route path="/manage-users" element={<ManageUsers />} />
             <Route path="/archived-reports" element={<ArchivedReports />} />

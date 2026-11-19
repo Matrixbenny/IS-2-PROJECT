@@ -2534,3 +2534,87 @@ section.kw-page-card > h3,
 .kw-checkbox-option { display: flex; align-items: center; gap: 8px; font-weight: 400; }
 .kw-checkbox-option input { width: auto; }
 .kw-agency-progress + .kw-agency-progress { margin-top: 14px; padding-top: 12px; border-top: 1px solid #e2e8f0; }
+
+/* ===== Citizen dashboard (sidebar + chart cards) ===== */
+.kw-avatar { display: block; border-radius: 50%; flex: 0 0 auto; box-shadow: 0 4px 14px rgba(15, 23, 42, 0.22); }
+.kw-dash {
+  --d-bg: #eef2f8; --d-card: #ffffff; --d-ink: #1e293b; --d-muted: #64748b; --d-line: #e2e8f0; --d-accent: #7c3aed;
+  display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 22px; align-items: start;
+  background: var(--d-bg); border-radius: 22px; padding: 20px; color: var(--d-ink);
+  /* The app's content column is narrow; the dashboard needs the full page width. */
+  position: relative; left: 50%; width: min(1180px, calc(100vw - 32px)); transform: translateX(-50%); box-sizing: border-box;
+}
+.kw-dash-sidebar {
+  position: sticky; top: 12px; background: var(--d-card); border-radius: 18px; padding: 22px 16px 18px;
+  box-shadow: 0 6px 24px rgba(30, 41, 59, 0.08); display: flex; flex-direction: column; gap: 18px;
+}
+.kw-dash-profile { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; padding-bottom: 14px; border-bottom: 1px solid var(--d-line); }
+.kw-dash-name { font-size: 1.05rem; }
+.kw-dash-email { font-size: 0.82rem; color: var(--d-muted); overflow-wrap: anywhere; }
+.kw-dash-anon-note { font-size: 0.74rem; color: var(--d-muted); line-height: 1.4; margin-top: 4px; }
+.kw-dash-nav { display: flex; flex-direction: column; gap: 4px; }
+.kw-dash-nav-link { display: block; padding: 9px 12px; border-radius: 10px; color: var(--d-ink); text-decoration: none; font-size: 0.92rem; font-weight: 500; }
+.kw-dash-nav-link:hover, .kw-dash-nav-link:focus-visible { background: #f1f5f9; color: var(--d-accent); }
+.kw-dash-logout { background: #3b82f6; color: #fff; border: 0; border-radius: 999px; padding: 10px 14px; font-weight: 700; letter-spacing: 0.04em; cursor: pointer; }
+.kw-dash-logout:hover { background: #2563eb; }
+.kw-dash-main { display: grid; gap: 18px; min-width: 0; background: transparent; }
+.kw-dash-top { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+.kw-dash-top h2 { margin: 2px 0 4px; }
+.kw-dash-top p { margin: 0; color: var(--d-muted); max-width: 52ch; }
+.kw-dash-top-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.kw-dash-pill { background: var(--d-accent); color: #fff; padding: 9px 16px; border-radius: 999px; font-size: 0.8rem; font-weight: 700; text-decoration: none; letter-spacing: 0.03em; }
+.kw-dash-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px; }
+.kw-dash-card { background: var(--d-card); border-radius: 18px; padding: 16px 18px; box-shadow: 0 6px 24px rgba(30, 41, 59, 0.07); min-width: 0; }
+.kw-dash-card h3 { margin: 0 0 8px; font-size: 0.95rem; color: var(--d-accent); font-weight: 700; }
+.kw-dash-wide { grid-column: span 2; }
+.kw-dash-wide-body { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 18px; align-items: center; }
+.kw-dash-bigstat strong { display: block; font-size: 2.4rem; line-height: 1; color: #0f172a; }
+.kw-dash-bigstat strong small { font-size: 1rem; color: var(--d-muted); font-weight: 600; }
+.kw-dash-bigstat span { font-size: 0.82rem; color: var(--d-muted); }
+.kw-donut { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.kw-donut-value { font-size: 26px; font-weight: 800; fill: #0f172a; }
+.kw-donut-label { font-size: 11px; fill: var(--d-muted, #64748b); }
+.kw-chart-legend { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, auto); gap: 4px 14px; font-size: 0.78rem; color: #475569; }
+.kw-legend-swatch { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; }
+.kw-axis-label { font-size: 9px; fill: #64748b; }
+.kw-line-tip { font-size: 9px; font-weight: 700; fill: #fff; }
+.kw-hub-number { font-size: 12px; font-weight: 800; fill: #0f172a; }
+.kw-stage-bars { max-height: 150px; }
+.kw-hub foreignObject .kw-avatar { box-shadow: none; }
+
+/* case journey stepper */
+.kw-journey { list-style: none; margin: 12px 0 8px; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.kw-journey-step { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; font-size: 0.74rem; color: #64748b; }
+.kw-journey-step::before { content: ''; position: absolute; top: 13px; left: -50%; width: 100%; height: 3px; background: #e2e8f0; z-index: 0; }
+.kw-journey-step:first-child::before { display: none; }
+.kw-journey-done::before, .kw-journey-current::before { background: #0d9488; }
+.kw-journey-dot { position: relative; z-index: 1; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; background: #e2e8f0; color: #475569; border: 2px solid #fff; }
+.kw-journey-done .kw-journey-dot { background: #0d9488; color: #fff; }
+.kw-journey-current .kw-journey-dot { background: #fff; color: #0d9488; border-color: #0d9488; box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.18); }
+.kw-journey-current .kw-journey-label { color: #0f172a; font-weight: 700; }
+.kw-journey-help { grid-column: 1 / -1; font-size: 0.7rem; color: #475569; max-width: 16ch; }
+
+@media (max-width: 1000px) {
+  .kw-dash { grid-template-columns: 1fr; }
+  .kw-dash-sidebar { position: static; }
+  .kw-dash-nav { flex-direction: row; flex-wrap: wrap; }
+}
+@media (max-width: 620px) {
+  .kw-dash { padding: 12px; }
+  .kw-dash-wide { grid-column: auto; }
+  .kw-dash-wide-body { grid-template-columns: 1fr; }
+  .kw-journey { grid-template-columns: 1fr; }
+  .kw-journey-step { flex-direction: row; text-align: left; gap: 10px; }
+  .kw-journey-step::before { display: none; }
+  .kw-journey-help { grid-column: auto; max-width: none; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .kw-dash-card { transition: transform 0.15s ease, box-shadow 0.15s ease; }
+  .kw-dash-card:hover { transform: translateY(-2px); box-shadow: 0 12px 30px rgba(30, 41, 59, 0.12); }
+}
+
+.kw-header-user .kw-avatar { margin: 0 auto 6px; }
+.kw-account { display: grid; gap: 18px; max-width: 640px; margin: 0 auto; }
+.kw-account-profile { display: flex; gap: 18px; align-items: center; }
+.kw-account-profile h2 { margin: 0 0 4px; }
+.kw-agency-progress .kw-journey { margin-top: 0; }

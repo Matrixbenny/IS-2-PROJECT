@@ -1,0 +1,41 @@
+{
+  "_comment": "Registry of text corpora the Kenyan-language work may use. A source is fetched only if its licence (verified from the dataset's own metadata at fetch time, not from this file) is on the allowlist. Anything unlicensed, scraped, or behind another party's terms is refused, not worked around.",
+  "allowed_licences": ["afl-3.0", "cc-by-4.0", "cc-by-sa-4.0", "cc-by-sa-3.0", "cc0-1.0", "apache-2.0", "mit", "cc-by-nc-4.0"],
+  "noncommercial_licences": ["cc-by-nc-4.0"],
+  "sources": [
+    {
+      "id": "masakhane/masakhanews",
+      "config": "swa",
+      "split": "train",
+      "text_fields": ["headline", "text"],
+      "language": "sw",
+      "register": "news",
+      "purpose": "Kiswahili vocabulary and sentence structure (BBC Swahili news, human-labelled for MasakhaNEWS)"
+    },
+    {
+      "id": "masakhane/masakhanews",
+      "config": "eng",
+      "split": "train",
+      "text_fields": ["headline", "text"],
+      "language": "en",
+      "register": "news",
+      "purpose": "English counterpart used to learn the difference between English and Kiswahili and to build code-mixed examples"
+    },
+    {
+      "id": "wikimedia/wikipedia",
+      "config": "20231101.sw",
+      "split": "train",
+      "text_fields": ["title", "text"],
+      "language": "sw",
+      "register": "encyclopedic",
+      "purpose": "Broad Kiswahili vocabulary (civics, law, government terms)"
+    }
+  ],
+  "refused": [
+    {"source": "X/Twitter, Facebook, TikTok, WhatsApp, Telegram and other social platforms", "why": "Scraping breaches the platforms' terms and collects people's personal data without consent, which the Kenya Data Protection Act, 2019 restricts. Use the platforms' official, consented research access if a project ever obtains it."},
+    {"source": "Kenyan films, TV, radio, music and books", "why": "Copyrighted; no licence to copy or train on them. Only works released under an open licence, or with the rights-holder's written permission, can be used."},
+    {"source": "Kenya Law judgments", "why": "Terms of use prohibit scraping, bulk download and machine-learning training without the NCLR's written licence (see ml/DATA_SOURCES.md)."},
+    {"source": "AfriSenti Swahili tweets", "why": "The dataset metadata declares no licence, and the text originates from X. Treat as unverified until the authors confirm terms in writing."},
+    {"source": "CC-100 Swahili", "why": "Licence is declared unknown (web-crawled text)."}
+  ]
+}

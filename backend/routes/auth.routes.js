@@ -693,6 +693,40 @@ router.delete('/me', requireAuth, async (req, res) => {
   }
 });
 
+// POST /api/auth/change-password - a signed-in user changes their own password.
+// Requires the current password, so someone who finds an unlocked browser cannot
+// take over the account. Every other session is signed out; this one continues.
+router.post('/change-password', requireAuth, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body || {};
+    if (typeof currentPassword !== 'string' || typeof newPassword !== 'string' || !currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Your current password and a new password are required' });
+    }
+    if (req.user.role === 'admin') {
+      return res.status(400).json({ error: 'The Admin password is managed locally. Use scripts/set-admin-password.js.' });
+    }
+    if (!isStrongPassword(newPassword)) return res.status(400).json({ error: PASSWORD_ERROR });
+    // req.user is loaded without the password hash, so fetch it for the check.
+    const user = await User.findById(req.user._id);
+    if (!user || !(await user.comparePassword(currentPassword))) {
+      return res.status(400).json({ error: 'Your current password is incorrect' });
+    }
+    if (await user.comparePassword(newPassword)) {
+      return res.status(400).json({ error: 'Choose a new password that is different from your current one' });
+    }
+    user.password = newPassword;
+    user.resetPasswordTokenHash = null;
+    user.resetPasswordExpiry = null;
+    await user.save();
+    // Keep this device signed in with a fresh session; older ones are now rejected.
+    res.cookie(COOKIE_NAME, signToken(user), cookieOptions());
+    return res.json({ message: 'Password changed. Any other devices have been signed out.' });
+  } catch (err) {
+    console.error('[password change] failed:', err.message);
+    return res.status(500).json({ error: 'Unable to change the password. Please try again later.' });
+  }
+});
+
 // POST /api/auth/forgot-password - decision #22: single-use, time-limited reset link.
 // Always responds the same way regardless of whether the email exists, so this endpoint
 // can never be used to check who has an account.
@@ -709,9 +743,16 @@ router.post('/forgot-password', async (req, res) => {
       user.resetPasswordExpiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
       await user.save();
 
-      const resetUrl = new URL('/reset-password', process.env.FRONTEND_ORIGIN || 'http://localhost:3000');
-      resetUrl.searchParams.set('email', user.email);
-      resetUrl.searchParams.set('token', token);
+      // Agency officers work in the Agency Case Portal, so their reset link opens
+      // the portal's own reset form rather than the citizen site.
+      const resetUrl = user.role === 'agency'
+        ? new URL(`/agency-portal/#reset?email=${encodeURIComponent(user.email)}&token=${token}`,
+          (process.env.AGENCY_PORTAL_ORIGIN || `http://localhost:${process.env.PORT || 5000}`))
+        : new URL('/reset-password', process.env.FRONTEND_ORIGIN || 'http://localhost:3000');
+      if (user.role !== 'agency') {
+        resetUrl.searchParams.set('email', user.email);
+        resetUrl.searchParams.set('token', token);
+      }
       try {
         await mailer.sendMail({
           to: user.email,

@@ -4,6 +4,8 @@ This folder contains dataset checks and experimental category-model training. Th
 
 The reviewer queue now has a separate, unsupervised TF-IDF/cosine-similarity feature in `backend/utils/relatedCaseMatcher.js`. It ranks possible textually similar reports within the same county after a reviewer submits an independent category assessment. It does not use a trained model or category labels, and its score is not a probability or a duplicate finding. Reviewers must decide whether to link cases. This bounded lexical baseline is suitable only as a review aid; language and phrasing limits and the 500-candidate scan are documented in the root README.
 
+Kenyan-language work (code-switching, Sheng, vocabulary growth, and what data may and may not be used) is in [LINGO.md](LINGO.md).
+
 See [DATA_SOURCES.md](DATA_SOURCES.md) for dataset provenance and collection guidance, and [LABELING_GUIDE.md](LABELING_GUIDE.md) for the pilot annotation rules.
 
 ## Dataset provenance and status

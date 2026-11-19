@@ -194,9 +194,15 @@ test('narrowing a case file stops the agency downloading a file that is no longe
   const dciReferral = saved.agencyReferrals.find((item) => item.agency === DCI.name);
   const evidenceId = dciReferral.caseFile.evidence[0].evidenceId.toString();
 
+  // The DCI has already worked the case, so only an Admin can take material back.
   await request(app)
     .patch(`/api/reports/${report._id}/referrals/${dciReferral._id}/case-file`)
     .set('Cookie', reviewerCookie)
+    .send({ releaseNarrative: false, releaseCategoryDetails: false, releaseEvidenceIds: [] })
+    .expect(403);
+  await request(app)
+    .patch(`/api/reports/${report._id}/referrals/${dciReferral._id}/case-file`)
+    .set('Cookie', adminCookie)
     .send({ releaseNarrative: false, releaseCategoryDetails: false, releaseEvidenceIds: [] })
     .expect(200);
   const denied = await request(app)

@@ -66,6 +66,34 @@ test('shows a styled citizen dashboard with report summary and case cards', asyn
   expect(api.get).toHaveBeenCalledWith('/reports/mine');
 });
 
+test('shows a masked, faceless profile picture and the case journey for each report', async () => {
+  renderDashboard();
+  await screen.findByRole('heading', { name: 'Welcome back, Amina' });
+  expect(screen.getAllByRole('img', { name: /masked, faceless figure/ }).length).toBeGreaterThan(0);
+  expect(screen.getByText(/never shows or stores a photo of you/)).toBeInTheDocument();
+  // The unresolved report is mid-journey; the resolved one has reached the outcome.
+  expect(screen.getByLabelText(/Case progress: step 2 of 5, Under review/)).toBeInTheDocument();
+  expect(screen.getByLabelText(/Case progress: step 5 of 5, Outcome recorded/)).toBeInTheDocument();
+  expect(screen.getByRole('img', { name: /Reports by status: Received 0, In review 1, Resolved 1/ })).toBeInTheDocument();
+});
+
+test('lets a citizen change their password from the dashboard', async () => {
+  api.post.mockResolvedValue({ data: { message: 'Password changed. Any other devices have been signed out.' } });
+  renderDashboard();
+  await screen.findByRole('heading', { name: 'Change your password' });
+  fireEvent.change(screen.getByLabelText('Current password'), { target: { value: 'OldPassw0rd!' } });
+  fireEvent.change(screen.getByLabelText('New password'), { target: { value: 'BrandNewPassw0rd!' } });
+  fireEvent.change(screen.getByLabelText('Confirm new password'), { target: { value: 'Different1!' } });
+  expect(screen.getByRole('button', { name: 'Change password' })).toBeDisabled();
+  fireEvent.change(screen.getByLabelText('Confirm new password'), { target: { value: 'BrandNewPassw0rd!' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Change password' }));
+  await waitFor(() => expect(api.post).toHaveBeenCalledWith('/auth/change-password', {
+    currentPassword: 'OldPassw0rd!',
+    newPassword: 'BrandNewPassw0rd!'
+  }));
+  expect(await screen.findByText(/other devices have been signed out/)).toBeInTheDocument();
+});
+
 test('explains empty report state and offers a route to submit a first report', async () => {
   api.get.mockResolvedValue({ data: [] });
   renderDashboard();

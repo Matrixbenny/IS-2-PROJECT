@@ -388,6 +388,11 @@ router.post('/:id/comments', requireAuth, async (req, res) => {
 
 function withSuggestedAgency(report, user) {
   const result = report.toReviewerTier();
+  // An agency that found the case outside its mandate sent it back; until a new
+  // referral exists the case needs rerouting.
+  result.referralReturned = report.activeReferrals().length === 0
+    && ['Received', 'In Review'].includes(report.status)
+    && (report.agencyReferrals || []).some((referral) => referral.endReason === 'declined');
   // Lets the queue flag cases where the receiving agency is waiting on us.
   result.openInformationRequests = report.activeReferrals()
     .reduce((total, referral) => total + (referral.informationRequests || []).filter((item) => item.status === 'open').length, 0);
@@ -904,6 +909,25 @@ router.get('/admin-overview', requireRole('admin'), async (req, res) => {
       }
     ]);
 
+    // Cases an agency sent back as outside its mandate and nobody has re-routed yet.
+    const returnedCandidates = await Report.find({
+      archivedAt: null,
+      status: { $in: ['Received', 'In Review'] },
+      'agencyReferrals.endReason': 'declined'
+    }).select('trackingReference agencyReferrals').limit(50);
+    const returnedRows = returnedCandidates
+      .filter((report) => report.activeReferrals().length === 0)
+      .map((report) => {
+        const declined = report.agencyReferrals.filter((item) => item.endReason === 'declined').pop();
+        return {
+          reportId: report._id,
+          trackingReference: report.trackingReference,
+          agency: declined.agency,
+          reason: declined.endNote,
+          returnedAt: declined.endedAt
+        };
+      });
+
     // How often reviewers accept the routing aid's recommendation.
     const routingRows = await Report.aggregate([
       { $match: { archivedAt: null } },
@@ -948,6 +972,8 @@ router.get('/admin-overview', requireRole('admin'), async (req, res) => {
         messagesForReview: pendingAgencyMessages,
         openInformationRequests: openInfoRows.length,
         informationRequestsAwaitingAnswer: openInfoRows.slice(0, 10),
+        returnedForRerouting: returnedRows.slice(0, 10),
+        returnedCount: returnedRows.length,
         staleCount: staleRows.length,
         staleReferrals: staleRows.slice(0, 10),
         staleThresholds: { unacknowledgedHours: REFERRAL_UNACKNOWLEDGED_HOURS, idleDays: REFERRAL_IDLE_DAYS },
@@ -1268,6 +1294,14 @@ router.patch('/:id/referrals/:referralId/case-file', requireRole('reviewer', 'ad
     if (newlyReleased.length > 0 && evidenceReviewed !== true) {
       return res.status(400).json({ error: EVIDENCE_REVIEW_ERROR });
     }
+    // Widening is a reviewer decision. Taking material back from an agency that
+    // has already begun its investigation is not: only an Admin can narrow it.
+    const narrowing = (referral.caseFile?.narrative && releaseNarrative !== true)
+      || (referral.caseFile?.categoryDetails && releaseCategoryDetails !== true)
+      || (referral.caseFile?.evidence || []).some((item) => !evidence.ids.includes(item.evidenceId.toString()));
+    if (narrowing && (referral.status || 'sent') !== 'sent' && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'This agency has already begun work. Only an Admin can take released material back.' });
+    }
     // Files that stay released keep their original release time.
     const kept = (referral.caseFile?.evidence || []).filter((item) => evidence.ids.includes(item.evidenceId.toString()));
     referral.caseFile.narrative = releaseNarrative === true ? report.description : null;
@@ -1299,6 +1333,12 @@ router.post('/:id/referrals/:referralId/end', requireRole('reviewer', 'admin'), 
     if (await isBlockedSelfReview(report, req.user)) return res.status(403).json({ error: SELF_REVIEW_ERROR });
     const referral = findReferral(report, req.params.referralId);
     if (!referral || referral.endedAt) return res.status(404).json({ error: 'Active referral not found' });
+    // Once an officer has acknowledged a case it is theirs to work. A reviewer may
+    // correct a misdirected referral before that, but pulling a case away from an
+    // institution that has begun is an Admin decision.
+    if ((referral.status || 'sent') !== 'sent' && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'This agency has already acted on the referral. Only an Admin can end it.' });
+    }
     for (const update of referral.agencyUpdates || []) {
       if (update.publicMessageStatus === 'pending') {
         update.publicMessageStatus = 'superseded';
@@ -1451,6 +1491,15 @@ router.patch('/:id/status', requireRole('reviewer', 'admin'), async (req, res) =
     if (!report) return res.status(404).json({ error: 'Report not found' });
     if (await isBlockedSelfReview(report, req.user)) {
       return res.status(403).json({ error: SELF_REVIEW_ERROR });
+    }
+    // The institution carrying out the investigation decides the outcome. A
+    // reviewer cannot resolve or reject a case over the head of an agency that is
+    // still working on it; the report resolves when the agencies close their part.
+    if (['Resolved', 'Rejected'].includes(status) && req.user.role !== 'admin'
+      && report.activeReferrals().some((referral) => referral.status !== 'closed')) {
+      return res.status(409).json({
+        error: 'An agency is still handling this case. It resolves when the agency closes its referral; a reviewer cannot override that.'
+      });
     }
 
     report.status = status;

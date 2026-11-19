@@ -225,15 +225,34 @@ function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-// Longest phrase first so "pesa ya chai" wins over "chai".
-const PHRASE_PATTERNS = Object.entries(SHENG_AND_DIALECT_TERMS)
-  .sort((left, right) => right[0].length - left[0].length)
-  .map(([term, canonical]) => ({
-    // Match whole words/phrases, refusing to fire when the token is part of a
-    // longer word (so "chaidai" never also matches "chai").
-    pattern: new RegExp(`(?<![\\p{L}\\p{N}])${escapeRegExp(term)}(?![\\p{L}\\p{N}])`, 'gu'),
-    canonical
-  }));
+function buildPhrasePatterns(glossary) {
+  // Longest phrase first so "pesa ya chai" wins over "chai".
+  return Object.entries(glossary)
+    .sort((left, right) => right[0].length - left[0].length)
+    .map(([term, canonical]) => ({
+      // Match whole words/phrases, refusing to fire when the token is part of a
+      // longer word (so "chaidai" never also matches "chai").
+      pattern: new RegExp(`(?<![\p{L}\p{N}])${escapeRegExp(term)}(?![\p{L}\p{N}])`, 'gu'),
+      canonical
+    }));
+}
+
+// Terms a reviewer proposed and an Admin approved. They extend, and can never
+// replace, the built-in glossary above.
+let approvedTerms = {};
+let PHRASE_PATTERNS = buildPhrasePatterns(SHENG_AND_DIALECT_TERMS);
+
+function registerApprovedTerms(terms) {
+  approvedTerms = {};
+  for (const [term, canonical] of Object.entries(terms || {})) {
+    if (!(term in SHENG_AND_DIALECT_TERMS)) approvedTerms[term] = canonical;
+  }
+  PHRASE_PATTERNS = buildPhrasePatterns({ ...SHENG_AND_DIALECT_TERMS, ...approvedTerms });
+}
+
+function glossaryTermCount() {
+  return { builtIn: Object.keys(SHENG_AND_DIALECT_TERMS).length, approved: Object.keys(approvedTerms).length };
+}
 
 const LINGO_STOP_PATTERN = new RegExp(
   `(?<![\\p{L}\\p{N}])(?:${Array.from(LINGO_STOP_WORDS).map(escapeRegExp).join('|')})(?![\\p{L}\\p{N}])`,
@@ -287,7 +306,7 @@ function normaliseForSimilarity(value) {
 function detectLingoTerms(value) {
   const text = ` ${normalizeText(value)} `;
   const found = [];
-  for (const [term, canonical] of Object.entries(SHENG_AND_DIALECT_TERMS)) {
+  for (const term of Object.keys({ ...SHENG_AND_DIALECT_TERMS, ...approvedTerms })) {
     const pattern = new RegExp(`(?<![\\p{L}\\p{N}])${escapeRegExp(term)}(?![\\p{L}\\p{N}])`, 'u');
     if (pattern.test(text) && !found.includes(term)) found.push(term);
   }
@@ -299,6 +318,8 @@ function detectLingoTerms(value) {
 
 module.exports = {
   SHENG_AND_DIALECT_TERMS,
+  registerApprovedTerms,
+  glossaryTermCount,
   LINGO_STOP_WORDS,
   normalizeText,
   expandLingoTerms,

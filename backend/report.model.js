@@ -50,7 +50,7 @@ const agencyUpdateSchema = new mongoose.Schema({
   note: String,
   status: {
     type: String,
-    enum: ['acknowledged', 'under_review', 'information_requested', 'action_taken', 'closed'],
+    enum: ['acknowledged', 'under_review', 'information_requested', 'action_taken', 'closed', 'returned'],
     default: null
   },
   publicMessage: { type: String, default: null },
@@ -107,7 +107,7 @@ const agencyReferralSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['sent', 'acknowledged', 'under_review', 'information_requested', 'action_taken', 'closed'],
+    enum: ['sent', 'acknowledged', 'under_review', 'information_requested', 'action_taken', 'closed', 'returned'],
     default: 'sent'
   },
   referredAt: { type: Date, default: null },
@@ -117,7 +117,7 @@ const agencyReferralSchema = new mongoose.Schema({
   // bribery and the Auditor-General for the misused funds). A referral stays in
   // the list for the audit record when it ends; it just stops being active.
   endedAt: { type: Date, default: null },
-  endReason: { type: String, enum: ['transferred', 'withdrawn', null], default: null },
+  endReason: { type: String, enum: ['transferred', 'withdrawn', 'declined', null], default: null },
   endNote: { type: String, default: null },
   endedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   // Every reopening of a closed referral, with the outcome it replaced.

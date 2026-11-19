@@ -4,6 +4,7 @@ import api from '../api';
 import { useAuth } from '../context/AuthContext';
 import EvidenceDownloads from '../components/EvidenceDownloads';
 import ReferralsPanel from '../components/ReferralsPanel';
+import { SuggestTerm } from '../components/LingoSuggestions';
 import usePolling from '../hooks/usePolling';
 
 function statusClass(status) {
@@ -542,6 +543,7 @@ function ReviewerQueue() {
         </a>
       </section>
       {error && <div className="error">{error}</div>}
+      <SuggestTerm />
 
       <div className="kw-queue-tabs" role="tablist" aria-label="Reviewer case views">
         <button
@@ -589,6 +591,11 @@ function ReviewerQueue() {
             <div className="kw-pro-meta"><b>Location:</b> {r.subCounty}, {r.county}</div>
             {r.isOwnReport && (
               <div className="kw-own-case-badge">Your own report - another reviewer must handle this</div>
+            )}
+            {r.referralReturned && (
+              <div className="kw-own-case-badge" role="status">
+                An agency returned this case as outside its mandate. Read its reason in the referral history and route the case to the right institution.
+              </div>
             )}
             {r.openInformationRequests > 0 && (
               <div className="kw-own-case-badge" role="status">

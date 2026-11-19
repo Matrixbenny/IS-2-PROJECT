@@ -115,12 +115,16 @@ const userSchema = new mongoose.Schema({
   }],
   resetPasswordTokenHash: { type: String, default: null },
   resetPasswordExpiry: { type: Date, default: null },
+  // Every session cookie carries the version it was issued under. A password
+  // change or reset bumps it, so a stolen session cannot outlive the change.
+  tokenVersion: { type: Number, default: 0 },
   createdAt: { type: Date, default: Date.now }
 });
 
 userSchema.pre('save', async function hashPassword() {
   if (!this.isModified('password')) return;
   this.password = await bcrypt.hash(this.password, 11);
+  if (!this.isNew) this.tokenVersion = (this.tokenVersion || 0) + 1;
 });
 
 userSchema.methods.comparePassword = function comparePassword(candidate) {

@@ -21,6 +21,9 @@ See [Docs/my IS story.md](Docs/my%20IS%20story.md) for the full set of 30 resear
 - Multi-agency referrals: a case can be referred to several institutions at once, each with its own case file, status and outcome. The report resolves only when every active referral has closed
 - Agency case portal with named, agency-scoped accounts; reviewer-prepared referral briefs plus an optional, item-by-item released case file (narrative, details, reviewed evidence); an auditable acknowledgement, information-request and follow-up lifecycle; Admin-reviewed reporter messages; and recorded outcomes that reach the citizen
 - Admin oversight of the justice loop: stalled referrals (unacknowledged for 72 hours or idle for 14 days), unanswered agency questions, reporter-message moderation, and reopening a referral closed in error
+- Citizen dashboard with a case-journey tracker, charts and a masked, faceless profile picture (every account on the platform uses the same symbol of anonymity; no photos are ever shown or stored)
+- Password reset by emailed single-use link, and password change for signed-in users; either one signs out every other session. Agency officers reset and change passwords inside their own portal
+- Kenyan-language handling: Sheng/Kiswahili/dialect glossary that reviewers extend and an Admin approves, plus licence-verified corpora and a robustness benchmark (see [ml/LINGO.md](ml/LINGO.md))
 - Public statistics page (aggregate-only) and a role-restricted Agency Case Portal
 - English/Kiswahili language toggle
 - Security: helmet security headers, rate limiting, a self-hosted CAPTCHA for anonymous submissions, bcrypt password hashing, httpOnly JWT cookie auth
@@ -142,6 +145,20 @@ Reports stored with the older single-referral shape are converted to multi-agenc
 - `set-admin-password-noninteractive.js <password>` — non-interactive variant of the Admin password setup, for scripted local setup only (the password is visible in shell history)
 - `generate-vapid-keys.js` — generates the VAPID key pair for Web Push phone alerts
 - `evaluate-classifier.js` — reports the keyword classifier's agreement with human-reviewed category labels on live cases
+
+## What happens to a report
+
+Kenya Watch does not deliver justice itself; the institutions with the legal mandate do. The platform's job is to get each case to them with a lawful, well-prepared file, and to make sure the case cannot quietly disappear.
+
+1. **Received.** The citizen gets a Tracking Reference and Access Key (or finds it in My Reports). The narrative is triaged for category and urgency; a human decides everything that matters.
+2. **Reviewed.** A trained reviewer claims the case, records an independent category, and sees routing suggestions. Reviewers decide which institution(s) get it and exactly what each may see.
+3. **Referred.** One or several institutions receive an individually verified, audited referral. Evidence goes only after the reviewer confirms they reviewed it.
+4. **Worked by the authorities.** The officer's decisions are theirs: a reviewer cannot resolve the case over them, withdraw it, or take material back once they have acted (only an Admin can, with a record). An officer who finds a case outside their mandate returns it with a reason and it is re-routed.
+5. **Outcome recorded.** Closing requires a recorded decision, the institution's file reference and a plain-language summary. If charges are filed the case is placed under legal hold automatically so court evidence survives.
+6. **Citizen informed.** The citizen sees each institution's progress and outcome. When every institution has closed, the report resolves. A closure made in error can be reopened by an Admin.
+7. **Accountability.** Stalled referrals (not acknowledged in 72 hours, idle for 14 days), unanswered agency questions and returned cases surface to the Admin. The public Statistics page publishes each institution's response rate, time to respond and outcomes once it has handled at least five referrals.
+
+What the platform cannot do: compel an institution to act. Without a formal partnership with EACC, DCI, ODPP and others, that depends on their goodwill and the transparency above. A real deployment needs that agreement, multi-factor sign-in and a security review first (see the deployment boundary below).
 
 ## Agency Case Workflow
 

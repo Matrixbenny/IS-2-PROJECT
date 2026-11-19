@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api';
 import { useAuth } from '../context/AuthContext';
+import { ReviewTerms } from '../components/LingoSuggestions';
 import usePolling from '../hooks/usePolling';
 
 const quickLinks = [
@@ -172,6 +173,24 @@ function AdminDashboard() {
               <div><strong>{overview.agencyReferrals.updates}</strong><span>agency updates recorded</span></div>
               <div><strong>{overview.agencyReferrals.pendingReporterMessages}</strong><span>reporter messages awaiting review</span></div>
             </div>
+            {(overview.agencyReferrals.returnedForRerouting || []).length > 0 && (
+              <div className="kw-admin-recent-referrals">
+                <h4>Returned by an agency, needing a new route ({overview.agencyReferrals.returnedCount})</h4>
+                <p className="kw-helper">An institution found these outside its mandate. Until a reviewer refers them again, nobody is working them.</p>
+                <ul className="kw-admin-attention-list">
+                  {overview.agencyReferrals.returnedForRerouting.map((item) => (
+                    <li className="kw-admin-attention-item" key={item.reportId}>
+                      <div className="kw-admin-attention-copy">
+                        <span className="kw-tracking-chip">{item.trackingReference}</span>
+                        <strong>{item.agency}</strong>
+                        <span>{item.reason}</span>
+                      </div>
+                      <Link to="/reviewer-queue" state={{ focusReportId: item.reportId }} className="kw-admin-case-link">Re-route</Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             {(overview.agencyReferrals.staleReferrals || []).length > 0 && (
               <div className="kw-admin-recent-referrals">
                 <h4>Referrals that have stalled ({overview.agencyReferrals.staleCount})</h4>
@@ -297,6 +316,7 @@ function AdminDashboard() {
               ))}
             </div>
           </section>
+          <ReviewTerms />
         </>
       ) : (
         !error && <div className="kw-empty-state">Admin overview is not available.</div>

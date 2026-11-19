@@ -64,6 +64,48 @@ function Stats() {
         </div>
       </div>
 
+      {stats.justiceLoop && (
+        <div className="kw-page-card" aria-labelledby="justice-loop-heading">
+          <h4 id="justice-loop-heading" style={{ marginTop: 0 }}>Is the law doing its job?</h4>
+          <div className="kw-helper" style={{ marginBottom: 10 }}>
+            What happens after a report reaches an institution. Kenya Watch refers cases; the institutions investigate and decide.
+            These aggregate figures make their response public. An agency appears here once it has handled at least{' '}
+            {stats.justiceLoop.minReferralsForAgencyFigures} referrals, so no single case can be identified.
+          </div>
+          <p>
+            <strong>{stats.justiceLoop.referred}</strong> referrals sent to institutions ·{' '}
+            <strong>{stats.justiceLoop.acknowledged}</strong> acknowledged ·{' '}
+            <strong>{stats.justiceLoop.closed}</strong> closed with a recorded outcome.
+          </p>
+          {stats.justiceLoop.agencies.length === 0 ? (
+            <div className="kw-faded">Per-institution figures appear once an institution has handled enough referrals.</div>
+          ) : (
+            <table className="kw-urgency-heatmap">
+              <caption className="kw-sr-only">Response of each institution to referred cases</caption>
+              <thead>
+                <tr>
+                  <th style={{ textAlign: 'left' }}>Institution</th>
+                  <th>Referred</th><th>Acknowledged</th><th>Median hours to respond</th><th>Closed</th><th>Charges filed</th><th>Returned</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stats.justiceLoop.agencies.map((row) => (
+                  <tr key={row.agency}>
+                    <td>{row.agency}</td>
+                    <td>{row.referred}</td>
+                    <td>{row.acknowledgedRate}%</td>
+                    <td>{row.medianHoursToAcknowledge ?? '—'}</td>
+                    <td>{row.closed}</td>
+                    <td>{row.outcomes.investigated_charged || 0}</td>
+                    <td>{row.returned}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+
       <div className="kw-page-card">
         <h4 style={{ marginTop: 0 }}>Reported category × triage urgency</h4>
         <div className="kw-helper" style={{ marginBottom: 10 }}>

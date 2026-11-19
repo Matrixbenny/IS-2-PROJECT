@@ -18,6 +18,9 @@ const caseFilter = document.getElementById('case-filter');
 let refreshTimer = null;
 let loadingCases = false;
 let latestCases = [];
+const STATUS_LABELS = {
+  returned: 'Return to Kenya Watch (outside our mandate)'
+};
 const OUTCOME_LABELS = {
   investigated_charged: 'Investigated and charges filed',
   investigated_no_action: 'Investigated, no charges filed',
@@ -62,18 +65,34 @@ applyPasswordToggle.addEventListener('click', () => {
   applyPasswordToggle.setAttribute('aria-pressed', String(visible));
 });
 
-function showApply() {
-  loginView.hidden = true;
-  casesView.hidden = true;
-  applyView.hidden = false;
+const forgotView = document.getElementById('forgot-view');
+const resetView = document.getElementById('reset-view');
+const allViews = [loginView, casesView, applyView, forgotView, resetView];
+
+function showOnly(view) {
+  allViews.forEach((item) => { item.hidden = item !== view; });
   window.scrollTo(0, 0);
 }
 
-function showLogin() {
-  applyView.hidden = true;
-  casesView.hidden = true;
-  loginView.hidden = false;
-  window.scrollTo(0, 0);
+function showApply() { showOnly(applyView); }
+
+function showLogin() { showOnly(loginView); }
+
+function showForgot() { showOnly(forgotView); }
+
+// Reset links from email look like /agency-portal/#reset?email=...&token=...
+function showReset() {
+  const params = new URLSearchParams(window.location.hash.replace(/^#reset\??/, ''));
+  document.getElementById('reset-email').value = params.get('email') || '';
+  document.getElementById('reset-token').value = params.get('token') || '';
+  showOnly(resetView);
+}
+
+function routeFromHash() {
+  const hash = window.location.hash;
+  if (hash === '#apply') showApply();
+  else if (hash === '#forgot') showForgot();
+  else if (hash.startsWith('#reset')) showReset();
 }
 
 showApplyLink.addEventListener('click', (event) => {
@@ -85,10 +104,88 @@ applyBackBtn.addEventListener('click', () => {
   window.location.hash = '';
   showLogin();
 });
-window.addEventListener('hashchange', () => {
-  if (window.location.hash === '#apply') showApply();
+window.addEventListener('hashchange', routeFromHash);
+routeFromHash();
+
+document.getElementById('show-forgot-link').addEventListener('click', (event) => {
+  event.preventDefault();
+  window.location.hash = '#forgot';
+  showForgot();
 });
-if (window.location.hash === '#apply') showApply();
+document.querySelectorAll('.ap-back-to-login').forEach((link) => link.addEventListener('click', (event) => {
+  event.preventDefault();
+  window.location.hash = '';
+  showLogin();
+}));
+
+async function postJson(path, body) {
+  return readResponse(await fetch(`${API_BASE}${path}`, {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  }));
+}
+
+function bindForm(id, { messageId, errorId, run }) {
+  const form = document.getElementById(id);
+  const message = document.getElementById(messageId);
+  const error = document.getElementById(errorId);
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    message.hidden = true;
+    error.hidden = true;
+    const button = form.querySelector('button[type="submit"]');
+    button.disabled = true;
+    try {
+      message.textContent = await run();
+      message.hidden = false;
+    } catch (failure) {
+      error.textContent = failure.message;
+      error.hidden = false;
+    } finally {
+      button.disabled = false;
+    }
+  });
+}
+
+bindForm('forgot-form', {
+  messageId: 'forgot-message',
+  errorId: 'forgot-error',
+  run: async () => (await postJson('/auth/forgot-password', { email: document.getElementById('forgot-email').value })).message
+});
+
+bindForm('reset-form', {
+  messageId: 'reset-message',
+  errorId: 'reset-error',
+  run: async () => {
+    const password = document.getElementById('reset-password').value;
+    if (password !== document.getElementById('reset-confirm').value) throw new Error('The new password and its confirmation do not match.');
+    const result = await postJson('/auth/reset-password', {
+      email: document.getElementById('reset-email').value,
+      token: document.getElementById('reset-token').value,
+      newPassword: password
+    });
+    document.getElementById('reset-form').reset();
+    window.setTimeout(() => { window.location.hash = ''; showLogin(); }, 1800);
+    return result.message;
+  }
+});
+
+bindForm('change-password-form', {
+  messageId: 'cp-message',
+  errorId: 'cp-error',
+  run: async () => {
+    const next = document.getElementById('cp-new').value;
+    if (next !== document.getElementById('cp-confirm').value) throw new Error('The new password and its confirmation do not match.');
+    const result = await postJson('/auth/change-password', {
+      currentPassword: document.getElementById('cp-current').value,
+      newPassword: next
+    });
+    document.getElementById('change-password-form').reset();
+    return result.message;
+  }
+});
 
 (async function loadAgencyPartners() {
   try {
@@ -246,10 +343,10 @@ function renderCases(cases) {
   }
   casesList.innerHTML = cases.map((item) => {
     const statusOptions = {
-      sent: ['acknowledged'],
-      acknowledged: ['under_review', 'information_requested', 'action_taken', 'closed'],
-      under_review: ['information_requested', 'action_taken', 'closed'],
-      information_requested: ['under_review', 'action_taken', 'closed'],
+      sent: ['acknowledged', 'returned'],
+      acknowledged: ['under_review', 'information_requested', 'action_taken', 'closed', 'returned'],
+      under_review: ['information_requested', 'action_taken', 'closed', 'returned'],
+      information_requested: ['under_review', 'action_taken', 'closed', 'returned'],
       action_taken: ['under_review', 'closed'],
       closed: []
     }[item.referralStatus] || [];
@@ -339,11 +436,11 @@ function renderCases(cases) {
         ${statusOptions.length > 0 ? `
           <form class="ap-update-form" data-id="${escapeHtml(item.id)}">
             <h4>Record a case update</h4>
-            <p class="ap-helper">The internal note is visible to your agency and Kenya Watch reviewers. Optional reporter-facing messages are held for Admin approval.</p>
+            <p class="ap-helper">The internal note is visible to your agency and Kenya Watch reviewers. Optional reporter-facing messages are held for Admin approval. To return a case outside your mandate, choose "Return to Kenya Watch" and explain why in the internal note (at least 20 characters).</p>
             <div class="ap-field">
               <label for="status-${escapeHtml(item.id)}">New referral status</label>
               <select id="status-${escapeHtml(item.id)}" name="status" required>
-                ${statusOptions.map((status) => `<option value="${status}">${status.replaceAll('_', ' ')}</option>`).join('')}
+                ${statusOptions.map((status) => `<option value="${status}">${escapeHtml(STATUS_LABELS[status] || status.replaceAll('_', ' '))}</option>`).join('')}
               </select>
             </div>
             <div class="ap-field">

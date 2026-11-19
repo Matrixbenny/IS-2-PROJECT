@@ -9,6 +9,8 @@ async function attachUser(req, res, next) {
     if (!token) return next();
     const payload = verifyToken(token);
     const user = await User.findById(payload.sub).select('-password');
+    // A password change or reset signs every earlier session out.
+    if (user && (payload.ver || 0) !== (user.tokenVersion || 0)) return next();
     const validAgencyAccount = user?.role !== 'agency' || (
       user.agencySlug && user.agencyVerificationReference && user.agencyVerifiedAt
     );

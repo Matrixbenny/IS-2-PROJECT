@@ -11,6 +11,7 @@ const evidenceRoutes = require('./routes/evidence.routes');
 const userRoutes = require('./routes/users.routes');
 const agencyPortalRoutes = require('./routes/agencyPortal.routes');
 const statsRoutes = require('./routes/stats.routes');
+const lingoRoutes = require('./routes/lingo.routes');
 const recordingRoutes = require('./routes/recording.routes');
 
 // Builds and returns a configured Express app WITHOUT connecting to MongoDB or
@@ -75,7 +76,8 @@ function createApp() {
     '/api/auth/reviewer-application',
     '/api/auth/agency-application',
     '/api/auth/forgot-password',
-    '/api/auth/reset-password'
+    '/api/auth/reset-password',
+    '/api/auth/change-password'
   ], authLimiter);
   app.use(['/api/reports/captcha-image', '/api/reports/captcha-challenge'], rateLimit({
     windowMs: 15 * 60 * 1000,
@@ -96,6 +98,7 @@ function createApp() {
   app.use('/api/users', userRoutes);
   app.use('/api/agency-portal', agencyPortalRoutes);
   app.use('/api/stats', statsRoutes);
+  app.use('/api/lingo', lingoRoutes);
 
   // Serves the local partner-portal UI; this is not connected to any government system.
   app.use('/agency-portal', express.static(path.join(__dirname, '..', 'agency-portal')));

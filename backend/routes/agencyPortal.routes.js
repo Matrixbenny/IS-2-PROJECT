@@ -120,8 +120,13 @@ router.post('/cases/:id/updates', requireRole('agency'), async (req, res) => {
     if (typeof note !== 'string' || !note.trim()) return res.status(400).json({ error: 'A note is required' });
     const cleanNote = note.trim();
     if (cleanNote.length > 2000) return res.status(400).json({ error: 'An update must be 2000 characters or fewer' });
-    const allowedStatuses = ['acknowledged', 'under_review', 'information_requested', 'action_taken', 'closed'];
+    const allowedStatuses = ['acknowledged', 'under_review', 'information_requested', 'action_taken', 'closed', 'returned'];
     if (!allowedStatuses.includes(status)) return res.status(400).json({ error: 'Select a valid referral status' });
+    // An institution that finds a case outside its mandate sends it back with a
+    // reason, so Kenya Watch can route it to the right authority.
+    if (status === 'returned' && cleanNote.length < 20) {
+      return res.status(400).json({ error: 'Explain why the case is outside your mandate (at least 20 characters) so Kenya Watch can route it correctly' });
+    }
     if (publicMessage !== undefined && (typeof publicMessage !== 'string' || publicMessage.trim().length > 500)) {
       return res.status(400).json({ error: 'A reporter update must be text of 500 characters or fewer' });
     }
@@ -170,10 +175,10 @@ router.post('/cases/:id/updates', requireRole('agency'), async (req, res) => {
     }
     const referral = report.activeReferralFor(agency.name);
     const transitions = {
-      sent: ['acknowledged'],
-      acknowledged: ['under_review', 'information_requested', 'action_taken', 'closed'],
-      under_review: ['information_requested', 'action_taken', 'closed'],
-      information_requested: ['under_review', 'action_taken', 'closed'],
+      sent: ['acknowledged', 'returned'],
+      acknowledged: ['under_review', 'information_requested', 'action_taken', 'closed', 'returned'],
+      under_review: ['information_requested', 'action_taken', 'closed', 'returned'],
+      information_requested: ['under_review', 'action_taken', 'closed', 'returned'],
       action_taken: ['under_review', 'closed'],
       closed: []
     };
@@ -194,6 +199,24 @@ router.post('/cases/:id/updates', requireRole('agency'), async (req, res) => {
       createdAt: new Date()
     });
     await report.save();
+
+    if (status === 'returned') {
+      for (const update of referral.agencyUpdates) {
+        if (update.publicMessageStatus === 'pending') {
+          update.publicMessageStatus = 'superseded';
+          update.reviewedAt = new Date();
+        }
+      }
+      referral.endedAt = new Date();
+      referral.endReason = 'declined';
+      referral.endNote = cleanNote;
+      referral.endedBy = req.user._id;
+      await report.save();
+      return res.status(201).json({
+        message: 'Returned to Kenya Watch. A reviewer will route the case to the right authority.',
+        returned: true
+      });
+    }
 
     // --- Close the justice loop -------------------------------------------------
     // Closing a referral records what this institution decided. The report the
@@ -233,6 +256,10 @@ router.post('/cases/:id/updates', requireRole('agency'), async (req, res) => {
         report.resolutionNote = outcomeSummary.trim();
         report.resolutionReference = outcomeReference.trim();
       }
+      // Charges mean court proceedings. Evidence and the audit record must survive
+      // until the case ends, so the case is placed under legal hold automatically;
+      // it cannot be archived, anonymised or deleted until an Admin lifts it.
+      if (outcome === 'investigated_charged') report.legalHold = true;
       await report.save();
 
       if (allClosed) {

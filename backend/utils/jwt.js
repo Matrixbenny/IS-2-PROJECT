@@ -2,7 +2,7 @@ const jwt = require('jsonwebtoken');
 
 function signToken(user) {
   return jwt.sign(
-    { sub: user._id.toString(), role: user.role },
+    { sub: user._id.toString(), role: user.role, ver: user.tokenVersion || 0 },
     process.env.JWT_SECRET,
     { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
   );

@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import api from '../api';
+import CaseJourney from '../components/CaseJourney';
 import EvidenceDownloads from '../components/EvidenceDownloads';
 import usePolling from '../hooks/usePolling';
 
@@ -117,6 +118,7 @@ function TrackReport() {
               </li>
             ))}
           </ul>
+          <CaseJourney report={report} />
           {report.agencyReferrals?.length > 0 && (
             <section aria-labelledby="agency-progress-heading">
               <h4 id="agency-progress-heading">
