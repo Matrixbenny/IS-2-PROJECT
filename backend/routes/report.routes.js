@@ -364,6 +364,9 @@ router.post('/:id/comments', requireAuth, async (req, res) => {
 
 function withSuggestedAgency(report, user) {
   const result = report.toReviewerTier();
+  // Lets the queue flag cases where the receiving agency is waiting on us.
+  result.openInformationRequests = (report.agencyReferral?.informationRequests || [])
+    .filter((item) => item.status === 'open').length;
   const annotations = report.categoryReview?.annotations || [];
   const ownAnnotation = user && annotations.find((item) => item.reviewer.toString() === user._id.toString());
   const isAdjudicator = user
@@ -835,6 +838,25 @@ router.get('/admin-overview', requireRole('admin'), async (req, res) => {
       ])
     ]);
 
+    // Agency questions that no reviewer has answered yet: the investigation is
+    // stalled until Kenya Watch replies, so the Admin must be able to see them.
+    const openInfoRows = await Report.aggregate([
+      { $match: { archivedAt: null } },
+      { $unwind: '$agencyReferral.informationRequests' },
+      { $match: { 'agencyReferral.informationRequests.status': 'open' } },
+      { $sort: { 'agencyReferral.informationRequests.requestedAt': 1 } },
+      {
+        $project: {
+          _id: 0,
+          reportId: '$_id',
+          trackingReference: 1,
+          agency: '$agencyReferral.agency',
+          question: '$agencyReferral.informationRequests.question',
+          requestedAt: '$agencyReferral.informationRequests.requestedAt'
+        }
+      }
+    ]);
+
     const statusCounts = Object.fromEntries(statuses.map(({ _id, count }) => [_id, count]));
     const roleCounts = Object.fromEntries(roles.map(({ _id, count }) => [_id, count]));
     return res.json({
@@ -867,7 +889,9 @@ router.get('/admin-overview', requireRole('admin'), async (req, res) => {
         byAgency: agencyReferrals,
         recent: recentAgencyReferrals,
         pendingReporterMessages: pendingAgencyMessageCount[0]?.count || 0,
-        messagesForReview: pendingAgencyMessages
+        messagesForReview: pendingAgencyMessages,
+        openInformationRequests: openInfoRows.length,
+        informationRequestsAwaitingAnswer: openInfoRows.slice(0, 10)
       }
     });
   } catch (err) {

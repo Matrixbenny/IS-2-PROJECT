@@ -155,7 +155,10 @@
     <section class="ap-role-separation" aria-label="Agency officer workspace">
       <strong>Agency Case Officer workspace</strong>
       <p>
-        This portal is separate from Kenya Watch's internal Reviewer Queue. You can follow up only on referrals sent to your assigned agency, using the referral brief and location details provided. You cannot access the original report narrative, evidence, or reporter identity. Optional messages for reporters are reviewed by a Kenya Watch Admin before sharing.
+        This portal is separate from Kenya Watch's internal Reviewer Queue. You can work only on referrals sent to your assigned agency.
+        Each case shows the referral brief and location, plus the complaint narrative and evidence files <em>only where a Kenya Watch reviewer has released them</em> for your investigation.
+        Opening a released case file or downloading evidence is recorded against your account. The reporter's identity is never shown; if you need more, ask Kenya Watch below.
+        Optional messages for reporters are reviewed by a Kenya Watch Admin before sharing.
       </p>
     </section>
     <div class="ap-cases-header">
@@ -164,6 +167,16 @@
         <button id="refresh-cases-btn" class="ap-btn-secondary" type="button">Refresh cases</button>
         <button id="logout-btn" class="ap-btn-secondary" type="button">Sign out</button>
       </div>
+    </div>
+    <div id="case-summary" class="ap-summary" aria-label="Case summary"></div>
+    <div class="ap-field ap-filter">
+      <label for="case-filter">Show</label>
+      <select id="case-filter">
+        <option value="all">All cases</option>
+        <option value="needs_action">Needs action (new, or Kenya Watch has replied)</option>
+        <option value="information_requested">Waiting on Kenya Watch</option>
+        <option value="closed">Closed</option>
+      </select>
     </div>
     <p id="last-refreshed" class="ap-helper" aria-live="polite"></p>
     <div id="cases-error" class="ap-error" role="alert" hidden></div>

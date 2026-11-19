@@ -888,6 +888,12 @@ function ReviewerQueue() {
             {r.isOwnReport && (
               <div className="kw-own-case-badge">Your own report - another reviewer must handle this</div>
             )}
+            {r.openInformationRequests > 0 && (
+              <div className="kw-own-case-badge" role="status">
+                {r.agencyReferral?.agency || 'The receiving agency'} is waiting for your answer
+                ({r.openInformationRequests} open {r.openInformationRequests === 1 ? 'question' : 'questions'}). Open the case to reply.
+              </div>
+            )}
             {r.claimedByMe && (
               <span className="kw-claim-badge kw-claim-mine">Claimed by you</span>
             )}

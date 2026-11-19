@@ -22,6 +22,28 @@ router.get('/cases', requireRole('agency'), async (req, res) => {
       'agencyReferral.agency': agency.name,
       'agencyReferral.referralSummary': { $type: 'string', $ne: '' }
     }).sort({ 'agencyReferral.referredAt': -1, createdAt: -1 });
+
+    // Opening a released case file is itself an auditable act. Record the first
+    // time each officer sees a case that carries released material; the portal's
+    // periodic refresh must not flood the log with repeats.
+    const viewedAt = new Date();
+    for (const r of reports) {
+      const file = r.agencyReferral.caseFile;
+      const hasMaterial = file && (file.narrative || file.categoryDetails || (file.evidence || []).length);
+      const alreadyLogged = (r.agencyReferral.accessLog || [])
+        .some((entry) => entry.action === 'view_case_file' && entry.userId && entry.userId.toString() === req.user._id.toString());
+      if (hasMaterial && !alreadyLogged) {
+        r.agencyReferral.accessLog.push({
+          userId: req.user._id,
+          userEmail: req.user.email,
+          action: 'view_case_file',
+          ipAddress: req.ip,
+          at: viewedAt
+        });
+        await r.save();
+      }
+    }
+
     return res.json(reports.map((r) => ({
       id: r._id,
       trackingReference: r.trackingReference,
@@ -46,6 +68,14 @@ router.get('/cases', requireRole('agency'), async (req, res) => {
         releasedAt: r.agencyReferral.caseFile?.releasedAt || null,
         releasedByName: r.agencyReferral.caseFile?.releasedByName || null
       },
+      resolution: r.agencyReferral.status === 'closed' && r.agencyReferral.resolution?.outcome ? {
+        outcome: r.agencyReferral.resolution.outcome,
+        outcomeReference: r.agencyReferral.resolution.outcomeReference,
+        outcomeSummary: r.agencyReferral.resolution.outcomeSummary,
+        legalBasis: r.agencyReferral.resolution.legalBasis,
+        courtsInvolved: r.agencyReferral.resolution.courtsInvolved,
+        closedAt: r.agencyReferral.resolution.closedAt
+      } : null,
       informationRequests: (r.agencyReferral.informationRequests || []).map((item) => ({
         question: item.question,
         status: item.status,

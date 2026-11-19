@@ -13,8 +13,18 @@ const casesError = document.getElementById('cases-error');
 const logoutBtn = document.getElementById('logout-btn');
 const refreshCasesBtn = document.getElementById('refresh-cases-btn');
 const lastRefreshed = document.getElementById('last-refreshed');
+const caseSummary = document.getElementById('case-summary');
+const caseFilter = document.getElementById('case-filter');
 let refreshTimer = null;
 let loadingCases = false;
+let latestCases = [];
+const OUTCOME_LABELS = {
+  investigated_charged: 'Investigated and charges filed',
+  investigated_no_action: 'Investigated, no charges filed',
+  referred_elsewhere: 'Referred to another authority',
+  administrative_action: 'Administrative action taken',
+  not_pursued: 'Not pursued by this institution'
+};
 
 agencyPasswordToggle.addEventListener('click', () => {
   const visible = agencyPassword.type === 'password';
@@ -157,17 +167,81 @@ function renderBrief(text) {
   return `<p>${escapeHtml(text)}</p>`;
 }
 
+function labelise(key) {
+  return String(key).replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ').replace(/^./, (c) => c.toUpperCase());
+}
+
+function renderDetails(details) {
+  if (details === null || details === undefined || details === '') return '';
+  if (typeof details !== 'object') return escapeHtml(details);
+  const rows = Object.entries(details)
+    .filter(([, value]) => value !== null && value !== undefined && value !== '')
+    .map(([key, value]) => `<dt>${escapeHtml(labelise(key))}</dt><dd>${typeof value === 'object' ? renderDetails(value) : escapeHtml(value)}</dd>`)
+    .join('');
+  return rows ? `<dl class="ap-details">${rows}</dl>` : '';
+}
+
+// A case needs the officer's attention when it is brand new, or when Kenya Watch
+// has answered a question and the investigation can move again.
+function needsAction(item) {
+  if (item.referralStatus === 'closed') return false;
+  return item.referralStatus === 'sent'
+    || (item.informationRequests || []).some((r) => r.status === 'answered' && item.referralStatus === 'information_requested');
+}
+
+function renderSummary(cases) {
+  const count = (fn) => cases.filter(fn).length;
+  const tiles = [
+    ['Total', cases.length],
+    ['New, not yet acknowledged', count((c) => c.referralStatus === 'sent')],
+    ['In progress', count((c) => ['acknowledged', 'under_review', 'action_taken'].includes(c.referralStatus))],
+    ['Waiting on Kenya Watch', count((c) => c.referralStatus === 'information_requested')],
+    ['Closed', count((c) => c.referralStatus === 'closed')]
+  ];
+  caseSummary.innerHTML = tiles.map(([label, value]) => `<div><strong>${value}</strong><span>${escapeHtml(label)}</span></div>`).join('');
+}
+
+// Work that needs the officer first, closed cases last; otherwise the server's
+// order (newest referral first) is kept.
+function priority(item) {
+  if (item.referralStatus === 'closed') return 2;
+  return needsAction(item) ? 0 : 1;
+}
+
+function visibleCases() {
+  const mode = caseFilter.value;
+  let list = latestCases;
+  if (mode === 'needs_action') list = latestCases.filter(needsAction);
+  else if (mode === 'information_requested') list = latestCases.filter((c) => c.referralStatus === 'information_requested');
+  else if (mode === 'closed') list = latestCases.filter((c) => c.referralStatus === 'closed');
+  return list.map((c, i) => [c, i]).sort((a, b) => priority(a[0]) - priority(b[0]) || a[1] - b[1]).map(([c]) => c);
+}
+
+// True while the officer is in the middle of writing something. The periodic
+// refresh must never replace the forms under their hands and discard a
+// half-written note or outcome.
+function officerIsEditing() {
+  const active = document.activeElement;
+  if (active && casesList.contains(active) && /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName)) return true;
+  return Array.from(casesList.querySelectorAll('form textarea, form input'))
+    .some((field) => field.value !== field.defaultValue && field.value.trim() !== '');
+}
+
 function showCases(profile) {
   agencyNameHeading.textContent = `Cases assigned to ${profile.agency}`;
   loginView.hidden = true;
   casesView.hidden = false;
   loadCases();
-  if (!refreshTimer) refreshTimer = window.setInterval(loadCases, 30000);
+  if (!refreshTimer) refreshTimer = window.setInterval(() => loadCases({ auto: true }), 30000);
 }
 
 function renderCases(cases) {
-  if (cases.length === 0) {
+  if (latestCases.length === 0) {
     casesList.innerHTML = '<div class="ap-empty">No active referrals are currently assigned to your agency.</div>';
+    return;
+  }
+  if (cases.length === 0) {
+    casesList.innerHTML = '<div class="ap-empty">No cases match this filter.</div>';
     return;
   }
   casesList.innerHTML = cases.map((item) => {
@@ -195,7 +269,7 @@ function renderCases(cases) {
         <h4>Case file released to your agency</h4>
         <p class="ap-helper">Released by ${escapeHtml(caseFile.releasedByName || 'Kenya Watch')}${caseFile.releasedAt ? ' on ' + escapeHtml(new Date(caseFile.releasedAt).toLocaleString()) : ''}. Every file you open is recorded against your account.</p>
         ${caseFile.narrative ? `<div class="ap-casefile-block"><b>Complaint narrative</b><p>${escapeHtml(caseFile.narrative)}</p></div>` : ''}
-        ${caseFile.categoryDetails ? `<div class="ap-casefile-block"><b>Structured category details</b><pre>${escapeHtml(JSON.stringify(caseFile.categoryDetails, null, 2))}</pre></div>` : ''}
+        ${caseFile.categoryDetails ? `<div class="ap-casefile-block"><b>Structured category details</b>${renderDetails(caseFile.categoryDetails)}</div>` : ''}
         ${evidenceFiles.length ? `
           <div class="ap-casefile-block">
             <b>Evidence files (${evidenceFiles.length})</b>
@@ -236,6 +310,16 @@ function renderCases(cases) {
           ${renderBrief(item.referralSummary)}
         </section>
         ${caseFileHtml}
+        ${item.resolution ? `
+          <section class="ap-resolution-record">
+            <h4>Outcome recorded for the reporter</h4>
+            <div class="ap-meta"><b>Decision:</b> ${escapeHtml(OUTCOME_LABELS[item.resolution.outcome] || item.resolution.outcome)}</div>
+            <div class="ap-meta"><b>Institution reference:</b> ${escapeHtml(item.resolution.outcomeReference)}</div>
+            ${item.resolution.legalBasis ? `<div class="ap-meta"><b>Legal basis:</b> ${escapeHtml(item.resolution.legalBasis)}</div>` : ''}
+            ${item.resolution.courtsInvolved ? `<div class="ap-meta"><b>Court:</b> ${escapeHtml(item.resolution.courtsInvolved)}</div>` : ''}
+            <p>${escapeHtml(item.resolution.outcomeSummary)}</p>
+            <div class="ap-helper">Closed ${escapeHtml(item.resolution.closedAt ? new Date(item.resolution.closedAt).toLocaleString() : '')}. The reporter's tracking page shows this result.</div>
+          </section>` : ''}
         <details class="ap-inforeq" ${infoRequests ? 'open' : ''}>
           <summary>Information requests to Kenya Watch${infoRequests ? ` (${infoRequests.length})` : ''}</summary>
           ${infoRequests ? `<ul class="ap-inforeq-list">${infoRequests}</ul>` : '<p class="ap-helper">No requests submitted yet.</p>'}
@@ -375,13 +459,19 @@ function renderCases(cases) {
   });
 }
 
-async function loadCases() {
+async function loadCases(options = {}) {
   if (loadingCases) return;
+  if (options.auto && officerIsEditing()) {
+    lastRefreshed.textContent = 'Automatic refresh is paused while you are writing an update. Submit it, or press "Refresh cases" to reload.';
+    return;
+  }
   loadingCases = true;
   casesError.hidden = true;
   refreshCasesBtn.disabled = true;
   try {
-    renderCases(await readResponse(await fetch(`${API_BASE}/agency-portal/cases`, { credentials: 'same-origin' })));
+    latestCases = await readResponse(await fetch(`${API_BASE}/agency-portal/cases`, { credentials: 'same-origin' }));
+    renderSummary(latestCases);
+    renderCases(visibleCases());
     lastRefreshed.textContent = `Last refreshed ${new Date().toLocaleTimeString()}. Cases refresh automatically every 30 seconds while this page is open.`;
   } catch (error) {
     casesError.textContent = error.message;
@@ -445,7 +535,8 @@ logoutBtn.addEventListener('click', async () => {
   }
 });
 
-refreshCasesBtn.addEventListener('click', loadCases);
+refreshCasesBtn.addEventListener('click', () => loadCases());
+caseFilter.addEventListener('change', () => renderCases(visibleCases()));
 
 fetch(`${API_BASE}/agency-portal/me`, { credentials: 'same-origin' })
   .then(readResponse)

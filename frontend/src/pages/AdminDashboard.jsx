@@ -172,6 +172,25 @@ function AdminDashboard() {
               <div><strong>{overview.agencyReferrals.updates}</strong><span>agency updates recorded</span></div>
               <div><strong>{overview.agencyReferrals.pendingReporterMessages}</strong><span>reporter messages awaiting review</span></div>
             </div>
+            {(overview.agencyReferrals.informationRequestsAwaitingAnswer || []).length > 0 && (
+              <div className="kw-admin-recent-referrals">
+                <h4>Agency questions awaiting a Kenya Watch answer ({overview.agencyReferrals.openInformationRequests})</h4>
+                <p className="kw-helper">The investigating officer cannot proceed until these are answered. Oldest first.</p>
+                <ul className="kw-admin-attention-list">
+                  {overview.agencyReferrals.informationRequestsAwaitingAnswer.map((item, index) => (
+                    <li className="kw-admin-attention-item" key={`${item.reportId}-${index}`}>
+                      <div className="kw-admin-attention-copy">
+                        <span className="kw-tracking-chip">{item.trackingReference}</span>
+                        <strong>{item.agency}</strong>
+                        <span>{item.question}</span>
+                        <span className="kw-admin-attention-meta">Asked {new Date(item.requestedAt).toLocaleString()}</span>
+                      </div>
+                      <Link to="/reviewer-queue" state={{ focusReportId: item.reportId }} className="kw-admin-case-link">Answer</Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             {overview.agencyReferrals.messagesForReview.length > 0 && (
               <div className="kw-admin-recent-referrals">
                 <h4>Reporter messages to review</h4>
