@@ -1,3 +1,4 @@
+import ReporterProtection from '../components/ReporterProtection';
 import React, { useEffect, useState } from 'react';
 import api from '../api';
 import { useAuth } from '../context/AuthContext';
@@ -314,6 +315,7 @@ function SubmitReport() {
   return (
     <div>
       <h2>{t('submit_title')}</h2>
+      <ReporterProtection />
       <div className="kw-helper" style={{ marginBottom: 14 }}>
         {user ? `Reporting as ${user.name} - ${t('submit_loggedIn')}` : t('submit_anon')}
       </div>

@@ -13,8 +13,8 @@ function CurrentPath() {
   return <div data-testid="current-path">{location.pathname}</div>;
 }
 
-function renderLogin(login) {
-  useAuth.mockReturnValue({ login });
+function renderLogin(login, verifyLogin) {
+  useAuth.mockReturnValue({ login, verifyLogin });
   useLanguage.mockReturnValue({
     t: (key) => ({ login_title: 'Sign In', label_email: 'Email', label_password: 'Password', signIn: 'Sign In' }[key] || key)
   });
@@ -44,4 +44,20 @@ test('redirects a regular user to the public home page after sign-in', async () 
   renderLogin(login);
 
   await waitFor(() => expect(screen.getByTestId('current-path')).toHaveTextContent('/'));
+});
+
+test('an officer is asked for the emailed code, and only the code step signs them in', async () => {
+  const login = vi.fn().mockResolvedValue({ mfaRequired: true, challengeId: 'abc', message: 'We emailed a 6-digit code to of***@eacc.go.ke.' });
+  const verifyLogin = vi.fn().mockResolvedValue({ role: 'admin' });
+  renderLogin(login, verifyLogin);
+
+  const codeBox = await screen.findByLabelText('Sign-in code');
+  expect(screen.getByText(/We emailed a 6-digit code/)).toBeInTheDocument();
+  expect(screen.queryByLabelText('Password')).not.toBeInTheDocument();
+  expect(screen.queryByTestId('current-path')).not.toBeInTheDocument();
+
+  fireEvent.change(codeBox, { target: { value: '123456' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Sign In' }));
+  await waitFor(() => expect(screen.getByTestId('current-path')).toHaveTextContent('/admin'));
+  expect(verifyLogin).toHaveBeenCalledWith('abc', '123456');
 });

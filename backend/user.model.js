@@ -118,6 +118,9 @@ const userSchema = new mongoose.Schema({
   // Every session cookie carries the version it was issued under. A password
   // change or reset bumps it, so a stolen session cannot outlive the change.
   tokenVersion: { type: Number, default: 0 },
+  // Per-account brake on password guessing, on top of the per-network rate limit.
+  failedLoginCount: { type: Number, default: 0 },
+  lockedUntil: { type: Date, default: null },
   createdAt: { type: Date, default: Date.now }
 });
 

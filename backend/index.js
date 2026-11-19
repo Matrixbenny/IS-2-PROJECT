@@ -7,6 +7,17 @@ const sms = require('./utils/sms');
 const { migrateLegacyReferrals } = require('./utils/migrateReferrals');
 const { refreshApprovedTerms } = require('./utils/lingoGlossary');
 
+const { productionProblems } = require('./utils/productionChecks');
+const { startScheduler } = require('./utils/scheduler');
+
+const problems = productionProblems();
+if (problems.length) {
+  console.error('Refusing to start in production:
+ - ' + problems.join('
+ - '));
+  process.exit(1);
+}
+
 const app = createApp();
 const PORT = process.env.PORT || 5000;
 
@@ -27,6 +38,7 @@ connectDB()
   .then(() => {
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
+      startScheduler();
     });
   })
   .catch((err) => {

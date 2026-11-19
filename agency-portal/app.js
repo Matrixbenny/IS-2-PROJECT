@@ -590,6 +590,7 @@ async function loadCases(options = {}) {
   }
 }
 
+let pendingChallenge = null;
 loginForm.addEventListener('submit', async (event) => {
   event.preventDefault();
   loginError.hidden = true;
@@ -597,16 +598,35 @@ loginForm.addEventListener('submit', async (event) => {
   button.disabled = true;
   try {
     const credentials = new FormData(loginForm);
-    await readResponse(await fetch(`${API_BASE}/auth/login`, {
+    const codeField = document.getElementById('code-field');
+    const step = await readResponse(await fetch(`${API_BASE}/auth/login${pendingChallenge ? '/verify' : ''}`, {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: credentials.get('email'), password: credentials.get('password') })
+      body: JSON.stringify(pendingChallenge
+        ? { challengeId: pendingChallenge, code: credentials.get('code') }
+        : { email: credentials.get('email'), password: credentials.get('password') })
     }));
+    if (step.mfaRequired) {
+      // Second step: the officer enters the code emailed to them.
+      pendingChallenge = step.challengeId;
+      codeField.hidden = false;
+      document.getElementById('agency-code').required = true;
+      document.getElementById('agency-code').focus();
+      loginError.textContent = step.message;
+      loginError.hidden = false;
+      return;
+    }
+    pendingChallenge = null;
+    codeField.hidden = true;
+    document.getElementById('agency-code').required = false;
     const profile = await readResponse(await fetch(`${API_BASE}/agency-portal/me`, { credentials: 'same-origin' }));
     loginForm.reset();
     showCases(profile);
   } catch (error) {
+    pendingChallenge = null;
+    document.getElementById('code-field').hidden = true;
+    document.getElementById('agency-code').required = false;
     let detail = `${error.message} Agency accounts must be individually provisioned by Kenya Watch.`;
     try {
       await readResponse(await fetch(`${API_BASE}/auth/logout`, { method: 'POST', credentials: 'same-origin' }));

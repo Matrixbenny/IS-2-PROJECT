@@ -30,12 +30,14 @@ const {
   verifyReceiptOtp
 } = require('../utils/reportEmailReceipt');
 
+const { notifyNewReferral, findOverdueReferrals, ACK_DAYS, STALE_DAYS } = require('../utils/referralSla');
 const router = express.Router();
 
 // A referral the agency has not acknowledged within this window, or that has
 // seen no activity for this long, is flagged to the Admin as stalled.
-const REFERRAL_UNACKNOWLEDGED_HOURS = 72;
-const REFERRAL_IDLE_DAYS = 14;
+// One definition of "overdue" shared with the reminder job (utils/referralSla.js).
+const REFERRAL_UNACKNOWLEDGED_HOURS = ACK_DAYS() * 24;
+const REFERRAL_IDLE_DAYS = STALE_DAYS();
 
 function pickCategoryDetails(reportedCategory, submitted = {}) {
   const allowedFields = (CATEGORY_FIELDS[reportedCategory] || []).map((f) => f.name);
@@ -710,6 +712,16 @@ router.get('/escalations', requireRole('admin'), async (req, res) => {
   }
 });
 
+// GET /api/reports/overdue-referrals - Admin-only: referrals an agency has not
+// acknowledged or has left without an update (see utils/referralSla.js).
+router.get('/overdue-referrals', requireRole('admin'), async (req, res) => {
+  try {
+    return res.json({ referrals: await findOverdueReferrals() });
+  } catch (err) {
+    return res.status(500).json({ error: 'Could not load overdue referrals' });
+  }
+});
+
 router.get('/admin-overview', requireRole('admin'), async (req, res) => {
   try {
     const cutoff = new Date(Date.now() - ESCALATION_THRESHOLD_MINUTES * 60 * 1000);
@@ -1264,6 +1276,7 @@ router.post('/:id/refer', requireRole('reviewer', 'admin'), async (req, res) => 
       informationRequests: []
     });
     await report.save();
+    notifyNewReferral(agency, report.trackingReference);
     return res.json(withSuggestedAgency(report, req.user));
   } catch (err) {
     return res.status(400).json({ error: err.message });

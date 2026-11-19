@@ -20,6 +20,10 @@ const recordingRoutes = require('./routes/recording.routes');
 function createApp() {
   const app = express();
 
+  // Behind a reverse proxy every visitor shares the proxy's address unless Express
+  // is told to trust it, which would make the per-network rate limits meaningless.
+  if (process.env.TRUST_PROXY) app.set('trust proxy', /^\d+$/.test(process.env.TRUST_PROXY) ? Number(process.env.TRUST_PROXY) : process.env.TRUST_PROXY);
+
   app.use(helmet());
   app.use(cors({ origin: process.env.FRONTEND_ORIGIN || 'http://localhost:3000', credentials: true }));
   app.use(express.json());

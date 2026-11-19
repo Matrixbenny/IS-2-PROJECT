@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import api from '../api';
 import { useAuth } from '../context/AuthContext';
 import { ReviewTerms } from '../components/LingoSuggestions';
+import OverdueReferrals from '../components/OverdueReferrals';
 import usePolling from '../hooks/usePolling';
 
 const quickLinks = [
@@ -316,6 +317,7 @@ function AdminDashboard() {
               ))}
             </div>
           </section>
+          <OverdueReferrals />
           <ReviewTerms />
         </>
       ) : (

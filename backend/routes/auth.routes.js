@@ -7,6 +7,7 @@ const { hashSecret, verifySecret } = require('../utils/tracking');
 const { normalizeEmail, getConfiguredAdminEmail, isConfiguredAdminEmail } = require('../utils/adminIdentity');
 const { verifyAdminPassword } = require('../utils/adminPassword');
 const mailer = require('../utils/mailer');
+const mfa = require('../utils/mfa');
 const { attachUser, requireAuth } = require('../middleware/auth');
 const { validatePdf, storeDocument, deleteDocuments } = require('../utils/reviewerApplicationDocuments');
 const { deleteUserAccount } = require('../utils/deleteCitizenAccount');
@@ -381,6 +382,9 @@ router.post('/login', async (req, res) => {
 
     const cleanEmail = normalizeEmail(email);
     const user = await User.findOne({ email: cleanEmail });
+    if (user?.lockedUntil && user.lockedUntil > new Date()) {
+      return res.status(429).json({ error: 'Too many failed attempts on this account. Wait 15 minutes, or reset your password.' });
+    }
     let valid = false;
     if (user?.role === 'admin' && isConfiguredAdminEmail(user.email)) {
       const adminPassword = await verifyAdminPassword(password);
@@ -396,6 +400,7 @@ router.post('/login', async (req, res) => {
     } else {
       valid = user ? await user.comparePassword(password) : false;
     }
+    if (user && !valid) await recordFailedLogin(user);
     if (valid && user.role === 'reviewer_pending') {
       const message = user.reviewerApplicationStatus === 'rejected'
         ? 'This reviewer application was not approved. Contact the Kenya Watch Admin for more information.'
@@ -422,16 +427,63 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
-    const token = signToken(user);
-    res.cookie(COOKIE_NAME, token, cookieOptions());
-    return res.json({
-      user: { id: user._id, name: user.name, email: user.email, role: user.role, agencySlug: user.agencySlug }
-    });
+    if (user.failedLoginCount || user.lockedUntil) {
+      await User.updateOne({ _id: user._id }, { $set: { failedLoginCount: 0, lockedUntil: null } });
+    }
+    if (mfa.isRequiredFor(user)) {
+      const challenge = await mfa.startChallenge(user);
+      return res.status(202).json({
+        mfaRequired: true,
+        challengeId: challenge.challengeId,
+        message: `We emailed a 6-digit code to ${maskEmail(user.email)}. It expires in ${challenge.expiresInMinutes} minutes.`
+      });
+    }
+    return completeSignIn(res, user);
   } catch (err) {
     console.error('[authentication] sign-in failed:', err.message);
     return res.status(500).json({ error: 'Unable to sign in. Please try again later.' });
   }
 });
+
+// Second step for agency officers, reviewers and the Admin (see utils/mfa.js).
+router.post('/login/verify', async (req, res) => {
+  try {
+    const { challengeId, code } = req.body || {};
+    const result = await mfa.verifyChallenge(challengeId, code);
+    if (!result.ok) return res.status(401).json({ error: result.error });
+    const user = await User.findById(result.userId);
+    const stillValid = user && user.isActive !== false &&
+      (user.role !== 'agency' || (user.agencySlug && user.agencyVerificationReference && user.agencyVerifiedAt)) &&
+      (user.role !== 'admin' || isConfiguredAdminEmail(user.email));
+    if (!stillValid) return res.status(401).json({ error: 'That account can no longer sign in.' });
+    return completeSignIn(res, user);
+  } catch (err) {
+    console.error('[authentication] code check failed:', err.message);
+    return res.status(500).json({ error: 'Unable to check the code. Please try again later.' });
+  }
+});
+
+function completeSignIn(res, user) {
+  res.cookie(COOKIE_NAME, signToken(user), cookieOptions());
+  return res.json({
+    user: { id: user._id, name: user.name, email: user.email, role: user.role, agencySlug: user.agencySlug }
+  });
+}
+
+function maskEmail(email) {
+  const [name, domain] = String(email).split('@');
+  return `${name.slice(0, 2)}***@${domain}`;
+}
+
+const MAX_FAILED_LOGINS = 5;
+const LOCK_MINUTES = 15;
+async function recordFailedLogin(user) {
+  const failures = (user.failedLoginCount || 0) + 1;
+  const update = failures >= MAX_FAILED_LOGINS
+    ? { failedLoginCount: 0, lockedUntil: new Date(Date.now() + LOCK_MINUTES * 60 * 1000) }
+    : { failedLoginCount: failures };
+  await User.updateOne({ _id: user._id }, { $set: update });
+}
 
 router.post('/logout', (req, res) => {
   res.clearCookie(COOKIE_NAME, cookieOptions());
@@ -797,6 +849,8 @@ router.post('/reset-password', async (req, res) => {
     if (!tokenValid) return res.status(400).json({ error: 'This reset link is invalid or has expired' });
 
     user.password = newPassword;
+    user.failedLoginCount = 0;
+    user.lockedUntil = null;
     if (user.role === 'agency' && !user.agencyInvitationAcceptedAt) {
       user.agencyInvitationAcceptedAt = new Date();
       user.isActive = true;

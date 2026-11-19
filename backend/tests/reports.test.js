@@ -506,7 +506,7 @@ test('uploaded evidence bytes are stored unchanged in GridFS and downloaded unch
   const fileId = report.evidence[0].gridFsId;
   const storedFile = await mongoose.connection.db.collection('evidence.files').findOne({ _id: fileId });
   assert.strictEqual(storedFile.length, originalFile.length);
-  assert.strictEqual(storedFile.filename, 'original.pdf');
+  assert.match(storedFile.filename, /^evidence-[0-9a-f]{8}\.pdf$/, 'the uploaded file name is replaced with a neutral one');
   assert.ok(await mongoose.connection.db.collection('evidence.chunks').countDocuments({ files_id: fileId }) > 0);
 
   const downloadedResponse = await request(app)
@@ -520,7 +520,7 @@ test('uploaded evidence bytes are stored unchanged in GridFS and downloaded unch
     });
   assert.strictEqual(downloadedResponse.status, 200);
   assert.deepStrictEqual(downloadedResponse.body, originalFile);
-  assert.match(downloadedResponse.headers['content-disposition'], /original\.pdf/);
+  assert.match(downloadedResponse.headers['content-disposition'], /evidence-[0-9a-f]{8}\.pdf/);
 
   const downloaded = await new Promise((resolve, reject) => {
     const chunks = [];
@@ -680,7 +680,7 @@ test('GET /api/evidence rejects unauthenticated, wrong-key, and wrong-report acc
     .field('subCounty', 'Central')
     .field('captchaToken', captcha.captchaToken)
     .field('captchaAnswer', captcha.captchaAnswer)
-    .attach('evidence', Buffer.from('secret-evidence-bytes'), { filename: 'secret-note.pdf', contentType: 'application/pdf' });
+    .attach('evidence', Buffer.from('%PDF-1.4 secret-evidence-bytes'), { filename: 'secret-note.pdf', contentType: 'application/pdf' });
   assert.strictEqual(created.status, 201);
   const report = await Report.findById(created.body.reportId);
   assert.ok(report.evidence.length >= 1);
@@ -705,7 +705,7 @@ test('GET /api/evidence rejects unauthenticated, wrong-key, and wrong-report acc
     .query({ ref: report.trackingReference, key: created.body.accessKey })
     .buffer(true);
   assert.strictEqual(correct.status, 200);
-  assert.strictEqual(correct.body.toString(), 'secret-evidence-bytes');
+  assert.strictEqual(correct.body.toString(), '%PDF-1.4 secret-evidence-bytes');
 });
 
 test('captcha verification fails closed on tampered, wrong-signature, and wrong-answer tokens', async () => {

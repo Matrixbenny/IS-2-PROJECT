@@ -30,6 +30,14 @@ export function AuthProvider({ children }) {
 
   const login = async (email, password) => {
     const res = await api.post('/auth/login', { email, password });
+    // Agency officers, reviewers and the Admin get a second step: an emailed code.
+    if (res.data.mfaRequired) return { mfaRequired: true, challengeId: res.data.challengeId, message: res.data.message };
+    setUser(res.data.user);
+    return res.data.user;
+  };
+
+  const verifyLogin = async (challengeId, code) => {
+    const res = await api.post('/auth/login/verify', { challengeId, code });
     setUser(res.data.user);
     return res.data.user;
   };
@@ -60,7 +68,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, deleteAccount, updateNotificationPreferences, refresh }}>
+    <AuthContext.Provider value={{ user, loading, login, verifyLogin, register, logout, deleteAccount, updateNotificationPreferences, refresh }}>
       {children}
     </AuthContext.Provider>
   );

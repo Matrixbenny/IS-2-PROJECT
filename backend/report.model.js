@@ -111,6 +111,8 @@ const agencyReferralSchema = new mongoose.Schema({
     default: 'sent'
   },
   referredAt: { type: Date, default: null },
+  // When the agency's officers were last reminded that this referral is overdue.
+  lastReminderAt: { type: Date, default: null },
   sentBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   sentByName: { type: String, default: null },
   // A case can be referred to several agencies at once (for example EACC for the
