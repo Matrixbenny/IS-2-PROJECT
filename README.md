@@ -15,7 +15,7 @@ See [Docs/my IS story.md](Docs/my%20IS%20story.md) for the full set of 30 resear
 - Asynchronous keyword-based category and urgency triage suggestions; after a reviewer submits an independent label, the queue can show an explicitly experimental synthetic-trained ML category suggestion and TF-IDF text similarity ranks possible same-county related reports, with human judgement required
 - Reviewer Queue: claim cases, update status (resolution requires a note + reference), refer to an Agency/Institution, link related cases; Admins can archive reports without destroying the audit record or evidence
 - Admin overview with live report, workflow, account, and escalation counts plus an urgency-ranked list of unclaimed cases; account management, archived-report controls, and data-retention/anonymization tooling
-- One configured Admin identity: Admin access is limited to `ADMIN_EMAIL`, while the salted password hash stays in MongoDB; public registration and account-management APIs cannot create, promote, reassign, or delete that Admin account
+- One configured Admin identity: Admin access is limited to `ADMIN_EMAIL`, and its salted password hash is kept only in the ignored local `.env` (never in MongoDB); public registration and account-management APIs cannot create, promote, reassign, or delete that Admin account
 - Reviewer access is approval-gated: applicants submit a statement, CV/resume, and proof of relevant qualification/training as PDFs; they cannot sign in or access reports while pending. Admins open the documents, attest to their manual authenticity/relevance check, and approve or reject applications in Manage Users. Submitted PDFs are deleted from storage after either decision; national ID and police-clearance documents are not requested. Admins can also directly provision reviewers
 - Agency case portal with named, agency-scoped accounts; reviewer-prepared minimum-data referral briefs; an auditable acknowledgement and follow-up lifecycle; and Admin-reviewed reporter messages
 - Public statistics page (aggregate-only) and a role-restricted Agency Case Portal
@@ -59,9 +59,9 @@ NODE_ENV=development
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
 SMTP_SECURE=false
-SMTP_USER=officialbillionaire.ke@gmail.com
+SMTP_USER=<your sender Gmail address>
 SMTP_PASS=<Google App Password>
-MAIL_FROM="Kenya Watch <officialbillionaire.ke@gmail.com>"
+MAIL_FROM="Kenya Watch <your sender Gmail address>"
 ```
 To send mail from Gmail, enable 2-Step Verification on the account and create a Google App Password. Put that App Password in `SMTP_PASS` in the ignored local `.env` or a deployment secret store; never share or commit it. The Gmail account's App Password is not the same as its normal sign-in password. Email delivery must be tested after configuring this. For local-only Ethereal email testing, set `MAIL_LOG_PREVIEW_URL=true` only in a private development environment; preview URLs grant access to messages. See [`backend/.env.example`](backend/.env.example) for configuration keys.
 Run the server:
@@ -76,7 +76,7 @@ node scripts/set-admin-password.js
 ```
 Choose a new, unique Admin password when prompted; input is hidden. The Admin login password is compared against `ADMIN_PASSWORD_HASH` and is not stored in MongoDB. For a fresh database with no Admin record, first run this script, then create the record using the email in `ADMIN_EMAIL`:
 ```powershell
-node scripts/bootstrap-admin.js "Full Name" "officialbillionaire.ke@gmail.com"
+node scripts/bootstrap-admin.js "Full Name" "<the ADMIN_EMAIL address>"
 ```
 Restart the backend after changing the local `.env`. Sign in with the configured Admin email and the password entered at the hidden prompt. Do not put that password in a command, source file, or message.
 
@@ -111,7 +111,7 @@ In a supported browser, open the website and use the browser's **Install app** o
 The interface includes keyboard skip navigation, visible focus styles, semantic landmarks, reduced-motion support, and screen-reader announcements for recording/upload status. Accessibility improvements target WCAG 2.2 AA practices; the project has not undergone a formal conformance audit.
 
 ### Why accessibility matters to this project
-Kenya Watch exists to serve every citizen affected by corruption, so the platform is built to be usable regardless of ability: it is fully keyboard-operable with a visible focus indicator, screen-reader compatible (semantic landmarks, labeled controls, live-region announcements for errors and confirmations, text alternatives behind visual charts), zoom-safe for low-vision users, and honors the operating-system reduced-motion preference. For a concise walkthrough of each accessibility feature, see [Docs/Presentation-Guide.md](Docs/Presentation-Guide.md) (Part 9).
+Kenya Watch exists to serve every citizen affected by corruption, so the platform is built to be usable regardless of ability: it is fully keyboard-operable with a visible focus indicator, screen-reader compatible (semantic landmarks, labeled controls, live-region announcements for errors and confirmations, text alternatives behind visual charts), zoom-safe for low-vision users, and honors the operating-system reduced-motion preference. The Accessibility section above lists the implemented features.
 
 ## Running Tests
 
@@ -134,6 +134,8 @@ npm test
 - `anonymize-expired.js [retentionDays=90]` — severs the identity link on long-resolved Path B reports past the retention window (skips cases flagged under legal hold); intended to be run periodically (e.g. via a scheduled task), not automatically
 - `set-password.js <email> <newPassword>` — reset any local account's password (dev convenience)
 - `peek-report.js <trackingReference>` — quick database-side view of a case for debugging
+- `set-admin-password-noninteractive.js <password>` — non-interactive variant of the Admin password setup, for scripted local setup only (the password is visible in shell history)
+- `generate-vapid-keys.js` — generates the VAPID key pair for Web Push phone alerts
 - `evaluate-classifier.js` — reports the keyword classifier's agreement with human-reviewed category labels on live cases
 
 ## Agency Case Workflow
@@ -157,6 +159,7 @@ The portal currently uses the project's ordinary password login and session cook
 backend/      Express API, MongoDB models, GridFS evidence storage, tests
 frontend/     React single-page app
 agency-portal/  Role-restricted agency case portal (no external government integration)
+ml/           Isolated ML experiments (synthetic data, training and export scripts)
 Docs/         Proposal, literature review, methodology, and the full design-decision narrative
 ```
 
