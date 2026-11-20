@@ -13,6 +13,12 @@ const quickLinks = [
   { title: 'Archived reports', detail: 'Restore archived cases or permanently remove eligible ones.', to: '/archived-reports', action: 'Review archive' }
 ];
 
+// "1 reviewer", "2 reviewers": counts on the dashboard read as plain English.
+function countLabel(count, noun) {
+  const n = Number(count) || 0;
+  return `${n} ${noun}${n === 1 ? '' : 's'}`;
+}
+
 function MetricCard({ label, value, note, emphasis = false }) {
   return (
     <div className={`kw-admin-metric${emphasis ? ' kw-admin-metric-emphasis' : ''}`}>
@@ -95,7 +101,12 @@ function AdminDashboard() {
             <MetricCard label="Active reports" value={overview.reports.active} note={`${overview.reports.total} total, including archived`} />
             <MetricCard label="Awaiting review" value={pendingReview} note="Received or in review" />
             <MetricCard label="Escalations" value={overview.escalations.count} note={`Unclaimed over ${overview.escalations.thresholdMinutes} minutes`} emphasis={overview.escalations.count > 0} />
-            <MetricCard label="Accounts" value={overview.accounts.total} note={`${overview.accounts.admins} admins · ${overview.accounts.reviewers} reviewers · ${overview.accounts.agencyOfficers} agency officers · ${overview.accounts.users} users`} />
+            <MetricCard label="Accounts" value={overview.accounts.total} note={[
+              countLabel(overview.accounts.admins, 'admin'),
+              countLabel(overview.accounts.reviewers, 'reviewer'),
+              countLabel(overview.accounts.agencyOfficers, 'agency officer'),
+              countLabel(overview.accounts.users, 'citizen account')
+            ].join(' · ')} />
           </section>
 
           <section className="kw-page-card kw-admin-status" aria-labelledby="report-status-heading">
