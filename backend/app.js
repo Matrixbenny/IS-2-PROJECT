@@ -1,3 +1,4 @@
+const fs = require('fs');
 const path = require('path');
 const express = require('express');
 const cors = require('cors');
@@ -91,9 +92,22 @@ function createApp() {
     message: { error: 'Too many security challenges requested. Please wait and try again.' }
   }));
 
-  app.get('/', (req, res) => {
-    res.send('Kenya Watch backend is running!');
+  // Used by the hosting platform's health check; reveals nothing about the data.
+  app.get('/api/health', (req, res) => {
+    res.json({ status: 'ok' });
   });
+
+  // In production one service serves the API, the agency portal and the built
+  // citizen/staff app, so the session cookie stays same-origin. In development
+  // Vite serves the app on port 3000 instead.
+  const frontendBuild = process.env.FRONTEND_BUILD_DIR || path.join(__dirname, '..', 'frontend', 'build');
+  const serveFrontend = process.env.NODE_ENV === 'production' && fs.existsSync(path.join(frontendBuild, 'index.html'));
+
+  if (!serveFrontend) {
+    app.get('/', (req, res) => {
+      res.send('Kenya Watch backend is running!');
+    });
+  }
 
   app.use('/api/auth', authRoutes);
   app.use('/api/reports', reportRoutes);
@@ -106,6 +120,15 @@ function createApp() {
 
   // Serves the local partner-portal UI; this is not connected to any government system.
   app.use('/agency-portal', express.static(path.join(__dirname, '..', 'agency-portal')));
+
+  if (serveFrontend) {
+    app.use(express.static(frontendBuild, { index: false }));
+    // Client-side routes (/track, /login, ...) all load the same page.
+    app.use((req, res, next) => {
+      if ((req.method !== 'GET' && req.method !== 'HEAD') || req.path.startsWith('/api/') || req.path.startsWith('/agency-portal')) return next();
+      res.sendFile(path.join(frontendBuild, 'index.html'));
+    });
+  }
 
   app.use((req, res) => {
     res.status(404).json({ error: 'Not found' });

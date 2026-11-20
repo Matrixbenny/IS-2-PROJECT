@@ -1,0 +1,23 @@
+# Keep the build context small and free of secrets, local data and copyrighted material.
+**/node_modules
+**/.env
+**/*.log
+.git
+.venv
+.vscode
+.kilo
+Docs
+artifacts
+backend/data
+backend/cookies.txt
+backend/tests
+frontend/build
+ml/artifacts
+ml/data/lingo
+ml/data/raw
+ml/data/approved
+ml/data/processed
+ml/data/*.pdf
+**/__pycache__
+*.txt
+!ml/requirements.txt

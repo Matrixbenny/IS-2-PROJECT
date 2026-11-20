@@ -119,6 +119,10 @@ The interface includes keyboard skip navigation, visible focus styles, semantic 
 ### Why accessibility matters to this project
 Kenya Watch exists to serve every citizen affected by corruption, so the platform is built to be usable regardless of ability: it is fully keyboard-operable with a visible focus indicator, screen-reader compatible (semantic landmarks, labeled controls, live-region announcements for errors and confirmations, text alternatives behind visual charts), zoom-safe for low-vision users, and honors the operating-system reduced-motion preference. The Accessibility section above lists the implemented features.
 
+## Deployment
+
+In production one Docker container serves the API, the built app and the Agency Case Portal from a single HTTPS address, with MongoDB hosted separately. [`DEPLOYMENT.md`](DEPLOYMENT.md) gives the step-by-step setup for Render and MongoDB Atlas; `render.yaml` and the `Dockerfile` are ready to use.
+
 ## Running Tests
 
 ### Backend
@@ -145,6 +149,7 @@ Reports stored with the older single-referral shape are converted to multi-agenc
 - `set-admin-password-noninteractive.js <password>` — non-interactive variant of the Admin password setup, for scripted local setup only (the password is visible in shell history)
 - `generate-vapid-keys.js` — generates the VAPID key pair for Web Push phone alerts
 - `evaluate-classifier.js` — reports the keyword classifier's agreement with human-reviewed category labels on live cases
+- `scripts/lingo-tools.js classify` — prints the live keyword classifier's category for each report passed on stdin, so the ML workspace measures the shipped rule rather than a copy of it
 
 ## What happens to a report
 
