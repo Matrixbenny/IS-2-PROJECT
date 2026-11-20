@@ -1466,6 +1466,18 @@ h2 {
   transition: border 0.15s, box-shadow 0.15s;
 }
 
+/* Checkboxes and radios keep their natural size; the full-width rule above is
+   for text fields and would otherwise squeeze a checkbox's label into a sliver. */
+.report-form input[type="checkbox"],
+.report-form input[type="radio"],
+.kw-pro-form input[type="checkbox"],
+.kw-pro-form input[type="radio"] {
+  width: auto;
+  padding: 0;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+
 .kw-pro-form .kw-otp-input {
   max-width: 260px;
   font-family: Consolas, Monaco, monospace;
