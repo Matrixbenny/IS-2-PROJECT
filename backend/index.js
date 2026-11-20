@@ -12,9 +12,7 @@ const { startScheduler } = require('./utils/scheduler');
 
 const problems = productionProblems();
 if (problems.length) {
-  console.error('Refusing to start in production:
- - ' + problems.join('
- - '));
+  console.error(`Refusing to start in production:\n - ${problems.join('\n - ')}`);
   process.exit(1);
 }
 
