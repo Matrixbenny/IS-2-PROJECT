@@ -83,9 +83,16 @@ const RESERVED_EMAIL_ERROR =
  * the wrong mailbox. Logs a loud warning instead of silently failing.
  */
 function warnIfAdminIdentityMisconfigured() {
-  const configuredAdmin = normalizeEmail(process.env.ADMIN_EMAIL);
+  const configuredAdmin = stripPlusAlias(process.env.ADMIN_EMAIL);
   if (!configuredAdmin) return;
-  if (isReservedDeveloperEmail(configuredAdmin)) {
+  // Compare against the sending mailboxes only: ADMIN_EMAIL is itself in the
+  // reserved list, so checking it against the whole list would always warn.
+  const senders = [
+    HARDCODED_RESERVED_ADDRESS,
+    process.env.MAIL_FROM && process.env.MAIL_FROM.match(/[\w.+-]+@[\w.-]+/)?.[0],
+    process.env.SMTP_USER && process.env.SMTP_USER.match(/[\w.+-]+@[\w.-]+/)?.[0],
+  ].map(stripPlusAlias).filter(Boolean);
+  if (senders.includes(configuredAdmin)) {
     console.warn(
       "[identity] ADMIN_EMAIL is set to the reserved developer inbox. " +
         "That mailbox can never be a user account and is where Kenya Watch sends mail. " +
