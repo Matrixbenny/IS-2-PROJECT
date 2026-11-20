@@ -1,0 +1,38 @@
+{
+  "dataset_name": "Kenya Watch synthetic colloquial corpus",
+  "status": "synthetic_only_not_for_real_world_validation_or_production_training",
+  "generation_method": "Hand-authored fictional allegations written in several registers (plain, SMS-style, Sheng/code-switched, second-hand, question form)",
+  "rows": 216,
+  "scenario_groups": 54,
+  "scenarios_per_category": {
+    "Bribery": 6,
+    "Embezzlement": 6,
+    "Procurement Fraud": 6,
+    "Abuse of Office": 6,
+    "Nepotism/Favoritism": 6,
+    "Extortion": 6,
+    "Fraud/Forgery of Documents": 6,
+    "Conflict of Interest": 6,
+    "Other": 6
+  },
+  "language_rows": {
+    "English": 108,
+    "Sheng": 108
+  },
+  "fictional_county_values_for_audit_only": [
+    "Nairobi",
+    "Mombasa",
+    "Kisumu",
+    "Nakuru",
+    "Meru",
+    "Kitui",
+    "Kilifi",
+    "Bungoma"
+  ],
+  "limitations": [
+    "Synthetic text is not an observation of a real Kenyan report.",
+    "The Sheng passages are written by the project author and have not been verified by a native speaker.",
+    "Variants within a group describe one incident and must stay in the same validation fold.",
+    "Scores on this corpus measure behaviour across registers; they are still not a real-world accuracy estimate."
+  ]
+}

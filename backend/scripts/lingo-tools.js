@@ -5,7 +5,11 @@
 //   node scripts/lingo-tools.js normalise        -> reads a JSON array of strings
 //                                                   on stdin, prints the normalised
 //                                                   array on stdout
+//   node scripts/lingo-tools.js classify         -> reads a JSON array of reports
+//                                                   on stdin, prints the keyword
+//                                                   classifier's category for each
 const { SHENG_AND_DIALECT_TERMS, normaliseForMatching, normalizeText } = require('../utils/kenyaLingo');
+const { classifyReportText } = require('../utils/classifier');
 
 function readStdin() {
   return new Promise((resolve, reject) => {
@@ -26,8 +30,15 @@ function readStdin() {
   } else if (command === 'plain') {
     const texts = JSON.parse(await readStdin());
     process.stdout.write(JSON.stringify(texts.map((text) => normalizeText(text))));
+  } else if (command === 'classify') {
+    const reports = JSON.parse(await readStdin());
+    process.stdout.write(JSON.stringify(reports.map((report) => classifyReportText({
+      title: report.title || '',
+      description: report.description || '',
+      evidenceCount: report.evidenceCount || 0,
+    }).category)));
   } else {
-    console.error('usage: node scripts/lingo-tools.js export-lexicon | normalise | plain');
+    console.error('usage: node scripts/lingo-tools.js export-lexicon | normalise | plain | classify');
     process.exit(2);
   }
 })();

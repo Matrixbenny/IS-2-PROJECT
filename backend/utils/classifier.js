@@ -10,12 +10,19 @@ const { detectLingoTerms, normaliseForMatching } = require('./kenyaLingo');
 const CATEGORY_KEYWORDS = {
   'Bribery': [
     ['bribe', 2], ['kickback', 3], ['gratification', 3], ['demanded money', 3], ['paid him', 2], ['paid her', 2], ['under the table', 3],
-    ['hongo', 3], ['rushwa', 3], ['kitu kidogo', 1], ['pesa ya chai', 2], ['toa chai', 1]
+    ['hongo', 3], ['rushwa', 3], ['kitu kidogo', 1], ['pesa ya chai', 2], ['toa chai', 1],
+    // A demand for money by an official is the commonest way a bribe is described
+    // in plain English, without the word "bribe" ever appearing.
+    ['demanded', 2], ['demanding', 2], ['demand for money', 3], ['pay to', 1], ['unofficial payment', 3],
+    ['facilitation fee', 3], ['asked for money', 3], ['asked me for', 1], ['paid the officer', 2], ['brown envelope', 3],
+    ['pay something extra', 3], ['extra payment', 3], ['asked me to pay', 2], ['asked to pay', 1], ['pay before', 2]
   ],
   // (Bribery continued in aliases below to keep lists readable)
   'Embezzlement': [
     ['embezzle', 3], ['misappropriat', 3], ['diverted funds', 3], ['missing funds', 2], ['public funds', 1], ['stolen money', 2],
-    ['fedha za umma zimepotea', 2], ['fedha za umma zilitumika vibaya', 2], ['matumizi mabaya ya fedha za umma', 2]
+    ['fedha za umma zimepotea', 2], ['fedha za umma zilitumika vibaya', 2], ['matumizi mabaya ya fedha za umma', 2],
+    // Money "disappearing" from a public budget is how embezzlement is usually told.
+    ['funds missing', 3], ['money disappeared', 3], ['zimepotea', 2], ['imepotea', 2], ['cdf', 1], ['took all the money', 3]
   ],
   'Procurement Fraud': [
     ['tender', 1], ['bid rigging', 3], ['procurement', 2], ['inflated contract', 3], ['ghost supplier', 3], ['supplier', 1],
@@ -30,8 +37,14 @@ const CATEGORY_KEYWORDS = {
     ['kuajiri ndugu', 2], ['upendeleo kwa ndugu', 2], ['jamaa yake amepewa kazi', 2]
   ],
   'Extortion': [
-    ['extort', 3], ['threatened', 1], ['forced to pay', 3], ['coerced', 2],
-    ['kulazimishwa kulipa', 3], ['kulazimishwa kutoa pesa', 3], ['vitisho vya kulipa', 2]
+    // "forced to pay" and "threatened" must stay whole phrases: a bare "pay"
+    // or "threatened" scores ordinary reports as extortion (a friendly police
+    // stop contains "police officer", which feeds this category via the alias
+    // list below, so one stray point is enough to misfile the case).
+    ['extort', 3], ['threatened to', 3], ['forced to pay', 3], ['coerced', 2],
+    ['kulazimishwa kulipa', 3], ['kulazimishwa kutoa pesa', 3], ['vitisho vya kulipa', 2],
+    // Threats carry the coercion that separates extortion from a bribe.
+    ['if i refused', 3], ['if you refuse', 3], ['or else', 2], ['kutishia', 3], ['refused extort', 3]
   ],
   'Fraud/Forgery of Documents': [
     ['forged', 3], ['forgery', 3], ['fake document', 3], ['falsified', 2], ['counterfeit', 3],
@@ -53,7 +66,11 @@ const CATEGORY_ALIAS_KEYWORDS = {
     ['embezzle public funds', 3], ['public funds government money', 3]
   ],
   'Extortion': [
-    ['police officer', 1]
+    // Naming a police officer is not itself evidence of extortion: a friendly
+    // roadblock report contains "police officer" and nothing improper. The
+    // category needs the officer AND coercion, so the officer term no longer
+    // scores on its own. "forced to pay" is already weighted under the main
+    // Bribery/Extortion lists.
   ]
 };
 

@@ -22,6 +22,27 @@ Replacements that are legal and already working:
 3. **Reviewers teach the system from real use.** Reviewers suggest Sheng, Kiswahili or dialect terms in the Reviewer Queue; an Admin approves, edits or rejects each one; approved terms reach the normaliser immediately (triage, related-case matching and model input). Suggestions accept plain words only: no digits, links or names.
 4. **Dictionaries used with written permission** ([`lingo/permissions.json`](lingo/permissions.json), [`lingo/ingest_dictionary.py`](lingo/ingest_dictionary.py)). Sheng, Kenyan-language and Digo dictionaries are copyrighted, so each is used only when its rights-holder's permission is recorded (date, scope, reference); an unregistered source is refused. The Digo-English-Swahili dictionary (BTL East Africa) yields a review CSV of crime and officialdom words for a Digo speaker to check; nothing reaches the glossary without Admin approval, and the extracted text is never committed or redistributed.
 5. **Measured robustness** ([`lingo/evaluate_lingo.py`](lingo/evaluate_lingo.py)).
+6. **Mined candidates from text the project may lawfully use** ([`lingo/mine_slang_candidates.py`](lingo/mine_slang_candidates.py)). Reads the synthetic seed and any licensed corpus, and writes two review files under `ml/data/processed/`: `lingo_slang_candidates.csv` (terms that keep company with a corruption canon, with the canon the sentence already produced) and `lingo_gap_candidates.csv` (sentences that name a corruption concept but contain words the glossary does not know). Nothing is added automatically; a Kenyan reviewer decides each row.
+
+## Why more sources were refused (checked 2026-11-20)
+
+Two further sources were offered for the language work and are recorded in [`lingo/sources.json`](lingo/sources.json) as refused, with the reason:
+
+| Source | Decision | Reason |
+|---|---|---|
+| [shengdictionary.co.ke](https://shengdictionary.co.ke/) | **Not scraped** | User-submitted slang entries, marked "© 2026 Sheng Dictionary" with no reuse licence, and empty at the time of checking. Scraping breaches its terms and takes third parties' contributions without consent. |
+| Githiora, *Sheng: Rise of a Kenyan Swahili Vernacular* (James Currey, 2018) | **Not used** | Copyrighted academic monograph ("All rights reserved. No part of this book may be reproduced in any form"). It is a linguistics study rather than a word list, and the supplied PDF has no usable text layer (about 237 extractable characters across 238 pages). |
+
+These refusals do not block progress, because the measured limit is not corpus size. A Sheng report is mis-classified when a term is missing from the glossary or is mapped to a canon that carries no weight in `backend/utils/classifier.js`, and no amount of extra prose fixes that. Mining the project's own 1,440 documents (about 533,000 tokens) returns almost entirely English vocabulary, because the synthetic seed contains no real Sheng. Sheng coverage must come from **reviewers entering terms they actually see**, which the workflow already supports.
+
+### The two gaps found in the Sheng probe
+
+A test with plain Sheng reports showed two concrete failures, both about canon, not vocabulary:
+
+- **Extortion scored as bribery.** `nikikataa` maps to `refused extort`, but the threat words in the same sentence (*kunichoma kisu*, *kutishia*) are not mapped, so the bribery canon dominates. The reviewer fix is to map the threat phrase, not the refusal.
+- **Embezzlement scored as Other.** Sheng money terms (*mullah*, *doo*, *manze*, *mchanga*) are absent from the *corruption* sense in the glossary, so the sentence loses its only signal.
+
+`mine_slang_candidates.py` writes exactly these rows (the unknown term plus the canon the sentence already carried) to `ml/data/processed/lingo_gap_candidates.csv` for a reviewer to confirm.
 
 ## Measured result (synthetic, 5 incident-grouped folds)
 
@@ -46,7 +67,9 @@ Reproduce:
 ```powershell
 .\.venv\Scripts\python.exe -m ml.lingo.fetch_corpora --max-rows 300
 .\.venv\Scripts\python.exe -m ml.lingo.mine_lexicon
+.\.venv\Scripts\python.exe -m ml.lingo.mine_slang_candidates
 .\.venv\Scripts\python.exe -m ml.lingo.evaluate_lingo
+.\.venv\Scripts\python.exe -m ml.src.keyword_baseline
 .\.venv\Scripts\python.exe -m unittest discover -s ml\tests
 ```
 

@@ -111,6 +111,36 @@ const SHENG_AND_DIALECT_TERMS = {
   'hamna njia': 'forced extortion',
   'lazima ulipe': 'forced to pay extort',
   'utalipa': 'forced to pay extort',
+  // Threats that accompany a demand. Before these were mapped, a Sheng
+  // extortion report scored as bribery: "nikikataa" carried the extort canon,
+  // but the threat beside it was invisible, so the money words won.
+  'kutishia': 'threatened extort',
+  'kutishia maisha': 'threatened to kill extort',
+  'kutishiwa': 'threatened extort',
+  'kutishiwa maisha': 'threatened to kill extort',
+  'kunichoma': 'threatened extort',
+  'kunichomeka': 'threatened extort',
+  'kuchomeka': 'threatened extort',
+  'kunichoma kisu': 'threatened extort coerced',
+  'kuchoma kisu': 'threatened extort coerced',
+  'kukuua': 'threatened to kill',
+  'kuuawa': 'threatened to kill',
+  'nitakuua': 'threatened to kill',
+  'tutakuua': 'threatened to kill',
+  'kukupiga': 'coerced threatened extort',
+  'kunipiga': 'coerced threatened extort',
+  'kukudhuru': 'threatened extort',
+  'utajuta': 'threatened extort coerced',
+
+  // --- money in the corruption sense (Sheng) ---
+  // These are deliberately mapped to "bribe" and not only to "money": in a
+  // corruption narrative the money word is the improper benefit, and mapping it
+  // to a neutral canon left embezzlement and bribery reports scoring as Other.
+  'mullah': 'bribe money amount',
+  'mula': 'bribe money amount',
+  'doo nyingi': 'bribe money amount',
+  'chedaz nyingi': 'bribe money amount',
+  'mkwanja mnene': 'bribe money amount',
 
   // --- Oxford-recognised corruption loanwords (added to the OED, 2024) ---
   // kitu kidogo = a bribe / token inducement; panya route = smugglers' secret path.

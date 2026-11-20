@@ -1,0 +1,217 @@
+text,label,group_id,language,county
+Asked for 500 before he would stamp my papers.,Bribery,colloquial-bribery-01,English,Mombasa
+the clerk wanted something small to sign my form,Bribery,colloquial-bribery-01,English,Kisumu
+Alinidai kitu kidogo ndio apige stempu.,Bribery,colloquial-bribery-01,Sheng,Nakuru
+msee akaniambia nilete hongo ya 500,Bribery,colloquial-bribery-01,Sheng,Meru
+dey askd me 4 500 2 fix ma permit,Bribery,colloquial-bribery-02,English,Kisumu
+officer said pay me n ill approve it quick,Bribery,colloquial-bribery-02,English,Nakuru
+kanjo alinidai 500 nimpitishe haraka,Bribery,colloquial-bribery-02,Sheng,Meru
+aliniambia nitoe chai ya stempu,Bribery,colloquial-bribery-02,Sheng,Kitui
+My brother says the lands clerk wanted money to open the file.,Bribery,colloquial-bribery-03,English,Nakuru
+he was asked for a bribe at the counter,Bribery,colloquial-bribery-03,English,Meru
+Jamaa yangu alidaiwa rushwa kwa ofisi ya lands.,Bribery,colloquial-bribery-03,Sheng,Kitui
+karani alitaka pesa aonee faili,Bribery,colloquial-bribery-03,Sheng,Kilifi
+Why do I have to pay extra for a service I already paid for?,Bribery,colloquial-bribery-04,English,Meru
+they want payment in hand to serve us,Bribery,colloquial-bribery-04,English,Kitui
+Kwa nini nilipe zaidi kwa huduma nimeshalipa?,Bribery,colloquial-bribery-04,Sheng,Kilifi
+wanataka malipo ya mkono kwa huduma,Bribery,colloquial-bribery-04,Sheng,Bungoma
+Inspector from health came and demanded a gift for the certificate.,Bribery,colloquial-bribery-05,English,Kitui
+he asked for something for himself before signing,Bribery,colloquial-bribery-05,English,Kilifi
+Mkaguzi wa afya alidai zawadi kwa cheti.,Bribery,colloquial-bribery-05,Sheng,Bungoma
+alitaka kitu chake kabla ya kutia sahihi,Bribery,colloquial-bribery-05,Sheng,Nairobi
+The guy at the window said no money no service.,Bribery,colloquial-bribery-06,English,Kilifi
+he wanted a kickback to process my invoice,Bribery,colloquial-bribery-06,English,Bungoma
+Msee wa dirisha akasema hakuna pesa hakuna huduma.,Bribery,colloquial-bribery-06,Sheng,Nairobi
+alitaka kitu kidogo kushughulikia ankara,Bribery,colloquial-bribery-06,Sheng,Mombasa
+The CDF money for the borehole is gone and nothing was built.,Embezzlement,colloquial-embezzlement-01,English,Mombasa
+the funds disappeared and the project stopped,Embezzlement,colloquial-embezzlement-01,English,Kisumu
+Mullah za CDF zimepotea na hakuna kisima.,Embezzlement,colloquial-embezzlement-01,Sheng,Nakuru
+doo za mradi zilipotea ghafla,Embezzlement,colloquial-embezzlement-01,Sheng,Meru
+money 4 the shcool lunch program is missing,Embezzlement,colloquial-embezzlement-02,English,Kisumu
+the bursary cash was withdrawn n never seen,Embezzlement,colloquial-embezzlement-02,English,Nakuru
+pesa za chakula cha shule zimepotea,Embezzlement,colloquial-embezzlement-02,Sheng,Meru
+fedha za bursary zilichukuliwa hazikuonekana,Embezzlement,colloquial-embezzlement-02,Sheng,Kitui
+Says the clerk diverted the health budget to his own account.,Embezzlement,colloquial-embezzlement-03,English,Nakuru
+the funds were misappropriated quietly,Embezzlement,colloquial-embezzlement-03,English,Meru
+Anasema karani alichota fedha za afya.,Embezzlement,colloquial-embezzlement-03,Sheng,Kitui
+fedha za umma zilitumika vibaya,Embezzlement,colloquial-embezzlement-03,Sheng,Kilifi
+Where did the county money for the road go?,Embezzlement,colloquial-embezzlement-04,English,Meru
+the budget for the dispensary vanished,Embezzlement,colloquial-embezzlement-04,English,Kitui
+Fedha za barabara zilienda wapi?,Embezzlement,colloquial-embezzlement-04,Sheng,Kilifi
+bajeti ya zahanati ilipotea,Embezzlement,colloquial-embezzlement-04,Sheng,Bungoma
+He took all the money and left the project half done.,Embezzlement,colloquial-embezzlement-05,English,Kitui
+the cash meant for supplies was never used for supplies,Embezzlement,colloquial-embezzlement-05,English,Kilifi
+Alichukua doo zote akaacha mradi nusu.,Embezzlement,colloquial-embezzlement-05,Sheng,Bungoma
+pesa ya vifaa haikununua vifaa,Embezzlement,colloquial-embezzlement-05,Sheng,Nairobi
+Water project money missing from the account,Embezzlement,colloquial-embezzlement-06,English,Kilifi
+they ate the funds for the youth program,Embezzlement,colloquial-embezzlement-06,English,Bungoma
+Pesa ya mradi wa maji haipo kwa akaunti,Embezzlement,colloquial-embezzlement-06,Sheng,Nairobi
+walikula fedha za vijana,Embezzlement,colloquial-embezzlement-06,Sheng,Mombasa
+The tender for the road was already decided before it opened.,Procurement Fraud,colloquial-procurement-fraud-01,English,Mombasa
+the bid was rigged for one company,Procurement Fraud,colloquial-procurement-fraud-01,English,Kisumu
+Zabuni ya barabara ilikuwa imeamuliwa kabla kufunguliwa.,Procurement Fraud,colloquial-procurement-fraud-01,Sheng,Nakuru
+zabuni ilipangwa kwa kampuni moja,Procurement Fraud,colloquial-procurement-fraud-01,Sheng,Meru
+contract was inflated n the co is owned by a relative,Procurement Fraud,colloquial-procurement-fraud-02,English,Kisumu
+ghost supplier invoiced for nothing,Procurement Fraud,colloquial-procurement-fraud-02,English,Nakuru
+bei ya mkataba ilipandishwa na kampuni ni ya ndugu,Procurement Fraud,colloquial-procurement-fraud-02,Sheng,Meru
+msambazaji wa hewa alitoa ankara,Procurement Fraud,colloquial-procurement-fraud-02,Sheng,Kitui
+Says the evaluation committee read only one bid.,Procurement Fraud,colloquial-procurement-fraud-03,English,Nakuru
+the award went to the company that did not quote lowest,Procurement Fraud,colloquial-procurement-fraud-03,English,Meru
+Anasema kamati ilisoma zabuni moja tu.,Procurement Fraud,colloquial-procurement-fraud-03,Sheng,Kitui
+tuzo ilienda kwa kampuni isiyo na bei ya chini,Procurement Fraud,colloquial-procurement-fraud-03,Sheng,Kilifi
+Why did the hospital pay for 40 beds and receive 12?,Procurement Fraud,colloquial-procurement-fraud-04,English,Meru
+the same supplier wins every tender,Procurement Fraud,colloquial-procurement-fraud-04,English,Kitui
+Kwa nini hospitali ililipa vitanda 40 ikapokea 12?,Procurement Fraud,colloquial-procurement-fraud-04,Sheng,Kilifi
+msambazaji mmoja hushinda zabuni zote,Procurement Fraud,colloquial-procurement-fraud-04,Sheng,Bungoma
+The tender documents were changed after closing.,Procurement Fraud,colloquial-procurement-fraud-05,English,Kitui
+the contract price doubled after signing,Procurement Fraud,colloquial-procurement-fraud-05,English,Kilifi
+Nyaraka za zabuni zilibadilishwa baada ya kufungwa.,Procurement Fraud,colloquial-procurement-fraud-05,Sheng,Bungoma
+bei ya mkataba iliongezwa mara mbili,Procurement Fraud,colloquial-procurement-fraud-05,Sheng,Nairobi
+company registered last month won a 200m tender,Procurement Fraud,colloquial-procurement-fraud-06,English,Kilifi
+they split the contract to avoid the limit,Procurement Fraud,colloquial-procurement-fraud-06,English,Bungoma
+kampuni iliyosajiliwa mwezi juzi ikashinda zabuni ya milioni,Procurement Fraud,colloquial-procurement-fraud-06,Sheng,Nairobi
+waligawanya mkataba kuepuka kikomo,Procurement Fraud,colloquial-procurement-fraud-06,Sheng,Mombasa
+He used his position to have my licence cancelled.,Abuse of Office,colloquial-abuse-of-office-01,English,Mombasa
+the officer misused his office against me,Abuse of Office,colloquial-abuse-of-office-01,English,Kisumu
+Alitumia ofisi yake kufuta leseni yangu.,Abuse of Office,colloquial-abuse-of-office-01,Sheng,Nakuru
+alitumia cheo vibaya dhidi yangu,Abuse of Office,colloquial-abuse-of-office-01,Sheng,Meru
+chief used his power 2 close my shop,Abuse of Office,colloquial-abuse-of-office-02,English,Kisumu
+he abused his position to punish me,Abuse of Office,colloquial-abuse-of-office-02,English,Nakuru
+chief alitumia mamlaka kufunga duka langu,Abuse of Office,colloquial-abuse-of-office-02,Sheng,Meru
+alitumia ofisi kuniadhibu,Abuse of Office,colloquial-abuse-of-office-02,Sheng,Kitui
+Says the director ordered staff to serve his friends first.,Abuse of Office,colloquial-abuse-of-office-03,English,Nakuru
+the boss used the office for personal orders,Abuse of Office,colloquial-abuse-of-office-03,English,Meru
+Anasema mkurugenzi aliamuru wafuasi wahudumiwe kwanza.,Abuse of Office,colloquial-abuse-of-office-03,Sheng,Kitui
+bosi alitumia ofisi kwa maagizo binafsi,Abuse of Office,colloquial-abuse-of-office-03,Sheng,Kilifi
+Why does the officer decide who gets served and who waits?,Abuse of Office,colloquial-abuse-of-office-04,English,Meru
+he acts as if the office belongs to him,Abuse of Office,colloquial-abuse-of-office-04,English,Kitui
+Kwa nini afisa anaamua nani ahudumiwe?,Abuse of Office,colloquial-abuse-of-office-04,Sheng,Kilifi
+anafanya kama ofisi ni yake,Abuse of Office,colloquial-abuse-of-office-04,Sheng,Bungoma
+The officer refused to release my documents without reason.,Abuse of Office,colloquial-abuse-of-office-05,English,Kitui
+he used his power to delay my case,Abuse of Office,colloquial-abuse-of-office-05,English,Kilifi
+Afisa alikataa kutoa nyaraka bila sababu.,Abuse of Office,colloquial-abuse-of-office-05,Sheng,Bungoma
+alitumia mamlaka kuchelewesha kesi yangu,Abuse of Office,colloquial-abuse-of-office-05,Sheng,Nairobi
+manager blocked my transfer after I complained,Abuse of Office,colloquial-abuse-of-office-06,English,Kilifi
+he misused the position to silence us,Abuse of Office,colloquial-abuse-of-office-06,English,Bungoma
+meneja alizuia uhamisho wangu baada ya malalamiko,Abuse of Office,colloquial-abuse-of-office-06,Sheng,Nairobi
+alitumia cheo kutunyamazisha,Abuse of Office,colloquial-abuse-of-office-06,Sheng,Mombasa
+"The job went to the manager's cousin, not to those who applied.",Nepotism/Favoritism,colloquial-nepotism-favoritism-01,English,Mombasa
+they hired a relative who never applied,Nepotism/Favoritism,colloquial-nepotism-favoritism-01,English,Kisumu
+"Kazi ilienda kwa ndugu wa meneja, si kwa walioomba.",Nepotism/Favoritism,colloquial-nepotism-favoritism-01,Sheng,Nakuru
+waliajiri ndugu ambaye hakuomba,Nepotism/Favoritism,colloquial-nepotism-favoritism-01,Sheng,Meru
+his daughter got the post w no interview,Nepotism/Favoritism,colloquial-nepotism-favoritism-02,English,Kisumu
+they only hire ppl from their village,Nepotism/Favoritism,colloquial-nepotism-favoritism-02,English,Nakuru
+mtoto wake akapata kazi bila usaili,Nepotism/Favoritism,colloquial-nepotism-favoritism-02,Sheng,Meru
+wanaajiri ndugu tu,Nepotism/Favoritism,colloquial-nepotism-favoritism-02,Sheng,Kitui
+Says the promotion list is all names from one family.,Nepotism/Favoritism,colloquial-nepotism-favoritism-03,English,Nakuru
+the contract was given to a family friend,Nepotism/Favoritism,colloquial-nepotism-favoritism-03,English,Meru
+Anasema orodha ya kupandishwa ni ndugu tu.,Nepotism/Favoritism,colloquial-nepotism-favoritism-03,Sheng,Kitui
+mkataba ulipewa rafiki wa familia,Nepotism/Favoritism,colloquial-nepotism-favoritism-03,Sheng,Kilifi
+Why was I skipped when her nephew was hired?,Nepotism/Favoritism,colloquial-nepotism-favoritism-04,English,Meru
+the vacancy was never advertised,Nepotism/Favoritism,colloquial-nepotism-favoritism-04,English,Kitui
+Kwa nini nilipitwa huku mpwa wake akaajiriwa?,Nepotism/Favoritism,colloquial-nepotism-favoritism-04,Sheng,Kilifi
+nafasi haikutangazwa,Nepotism/Favoritism,colloquial-nepotism-favoritism-04,Sheng,Bungoma
+Every posting in this office goes to the same clan.,Nepotism/Favoritism,colloquial-nepotism-favoritism-05,English,Kitui
+the shortlist was already known,Nepotism/Favoritism,colloquial-nepotism-favoritism-05,English,Kilifi
+Nafasi zote ofisi hii zinenda kwa kabila moja.,Nepotism/Favoritism,colloquial-nepotism-favoritism-05,Sheng,Bungoma
+orodha ya mwisho ilijulikana,Nepotism/Favoritism,colloquial-nepotism-favoritism-05,Sheng,Nairobi
+my sister was denied the job but the chief's son got it,Nepotism/Favoritism,colloquial-nepotism-favoritism-06,English,Kilifi
+favouritism in the recruitment,Nepotism/Favoritism,colloquial-nepotism-favoritism-06,English,Bungoma
+dada yangu alinyimwa kazi lakini mtoto wa chief akapata,Nepotism/Favoritism,colloquial-nepotism-favoritism-06,Sheng,Nairobi
+upendeleo kwa ndugu kwenye kuajiri,Nepotism/Favoritism,colloquial-nepotism-favoritism-06,Sheng,Mombasa
+He said if I refuse he will have me arrested.,Extortion,colloquial-extortion-01,English,Mombasa
+the officer threatened me until I paid,Extortion,colloquial-extortion-01,English,Kisumu
+Alisema nikikataa atanifunga.,Extortion,colloquial-extortion-01,Sheng,Nakuru
+afisa alinitishia hadi nililipa,Extortion,colloquial-extortion-01,Sheng,Meru
+karao said pay or ill sleep in cells,Extortion,colloquial-extortion-02,English,Kisumu
+they threatened to cut me if i didnt pay,Extortion,colloquial-extortion-02,English,Nakuru
+karao akasema lipe au ulale ndani,Extortion,colloquial-extortion-02,Sheng,Meru
+walinitishia kunichoma kisu nikikataa,Extortion,colloquial-extortion-02,Sheng,Kitui
+Says the guard demanded money to let the lorry pass.,Extortion,colloquial-extortion-03,English,Nakuru
+he forced my brother to pay at the gate,Extortion,colloquial-extortion-03,English,Meru
+Anasema mlinzi alidai pesa lori ipite.,Extortion,colloquial-extortion-03,Sheng,Kitui
+alimlazimisha ndugu yangu kulipa langoni,Extortion,colloquial-extortion-03,Sheng,Kilifi
+Why must I pay to be released at the roadblock?,Extortion,colloquial-extortion-04,English,Meru
+he would not let me go without payment,Extortion,colloquial-extortion-04,English,Kitui
+Kwa nini nilipie nitolewe kwenye kizuizi?,Extortion,colloquial-extortion-04,Sheng,Kilifi
+hakuachia bila malipo,Extortion,colloquial-extortion-04,Sheng,Bungoma
+The man at the gate threatened my staff until we paid.,Extortion,colloquial-extortion-05,English,Kitui
+he demanded and warned us of consequences,Extortion,colloquial-extortion-05,English,Kilifi
+Mtu wa lango alitishia wafanyakazi hadi tulilipa.,Extortion,colloquial-extortion-05,Sheng,Bungoma
+alidai na kututishia madhara,Extortion,colloquial-extortion-05,Sheng,Nairobi
+askari held my id n said pay 200 or else,Extortion,colloquial-extortion-06,English,Kilifi
+forced to pay under threat,Extortion,colloquial-extortion-06,English,Bungoma
+askari akashika kitambulisho akasema lipe 200 au la,Extortion,colloquial-extortion-06,Sheng,Nairobi
+kulazimishwa kulipa kwa vitisho,Extortion,colloquial-extortion-06,Sheng,Mombasa
+The receipt they gave me has a different name on it.,Fraud/Forgery of Documents,colloquial-fraud-forgery-of-documents-01,English,Mombasa
+the certificate is fake,Fraud/Forgery of Documents,colloquial-fraud-forgery-of-documents-01,English,Kisumu
+Risiti waliyonipa ina jina lingine.,Fraud/Forgery of Documents,colloquial-fraud-forgery-of-documents-01,Sheng,Nakuru
+cheti ni bandia,Fraud/Forgery of Documents,colloquial-fraud-forgery-of-documents-01,Sheng,Meru
+signature on my form was forged,Fraud/Forgery of Documents,colloquial-fraud-forgery-of-documents-02,English,Kisumu
+the land title is fake n was printed elsewhere,Fraud/Forgery of Documents,colloquial-fraud-forgery-of-documents-02,English,Nakuru
+sahihi kwenye fomu yangu ilighushiwa,Fraud/Forgery of Documents,colloquial-fraud-forgery-of-documents-02,Sheng,Meru
+hati ya ardhi ni bandia,Fraud/Forgery of Documents,colloquial-fraud-forgery-of-documents-02,Sheng,Kitui
+Says the payslip submitted was not the real one.,Fraud/Forgery of Documents,colloquial-fraud-forgery-of-documents-03,English,Nakuru
+the academic paper is a forgery,Fraud/Forgery of Documents,colloquial-fraud-forgery-of-documents-03,English,Meru
+Anasema payslip iliyowasilishwa si ya kweli.,Fraud/Forgery of Documents,colloquial-fraud-forgery-of-documents-03,Sheng,Kitui
+karatasi ya masomo ni ya kughushi,Fraud/Forgery of Documents,colloquial-fraud-forgery-of-documents-03,Sheng,Kilifi
+Why does the record show a payment I never made?,Fraud/Forgery of Documents,colloquial-fraud-forgery-of-documents-04,English,Meru
+the invoice number does not exist in the system,Fraud/Forgery of Documents,colloquial-fraud-forgery-of-documents-04,English,Kitui
+Kwa nini rekodi inaonyesha malipo nisiyofanya?,Fraud/Forgery of Documents,colloquial-fraud-forgery-of-documents-04,Sheng,Kilifi
+namba ya ankara haipo kwenye mfumo,Fraud/Forgery of Documents,colloquial-fraud-forgery-of-documents-04,Sheng,Bungoma
+The clearance letter carries a stamp that is not theirs.,Fraud/Forgery of Documents,colloquial-fraud-forgery-of-documents-05,English,Kitui
+they falsified the delivery note,Fraud/Forgery of Documents,colloquial-fraud-forgery-of-documents-05,English,Kilifi
+Barua ya kibali ina muhuri si wao.,Fraud/Forgery of Documents,colloquial-fraud-forgery-of-documents-05,Sheng,Bungoma
+walighushi hati ya uwasilishaji,Fraud/Forgery of Documents,colloquial-fraud-forgery-of-documents-05,Sheng,Nairobi
+my degree cert was changed,Fraud/Forgery of Documents,colloquial-fraud-forgery-of-documents-06,English,Kilifi
+they edited the register to add a name,Fraud/Forgery of Documents,colloquial-fraud-forgery-of-documents-06,English,Bungoma
+cheti changu cha shahada kilibadilishwa,Fraud/Forgery of Documents,colloquial-fraud-forgery-of-documents-06,Sheng,Nairobi
+walibadilisha rejista kuongeza jina,Fraud/Forgery of Documents,colloquial-fraud-forgery-of-documents-06,Sheng,Mombasa
+The officer who approved the tender owns the company.,Conflict of Interest,colloquial-conflict-of-interest-01,English,Mombasa
+he had a personal interest in the award,Conflict of Interest,colloquial-conflict-of-interest-01,English,Kisumu
+Afisa aliyeidhinisha zabuni anamiliki kampuni.,Conflict of Interest,colloquial-conflict-of-interest-01,Sheng,Nakuru
+alikuwa na maslahi binafsi kwenye tuzo,Conflict of Interest,colloquial-conflict-of-interest-01,Sheng,Meru
+director sits on the board n also owns the supplier,Conflict of Interest,colloquial-conflict-of-interest-02,English,Kisumu
+he never declared his shares,Conflict of Interest,colloquial-conflict-of-interest-02,English,Nakuru
+mkurugenzi ni mjumbe na pia anamiliki msambazaji,Conflict of Interest,colloquial-conflict-of-interest-02,Sheng,Meru
+hakutoa tamko la hisa zake,Conflict of Interest,colloquial-conflict-of-interest-02,Sheng,Kitui
+Says the committee chair has a stake in the winning bid.,Conflict of Interest,colloquial-conflict-of-interest-03,English,Nakuru
+an undisclosed interest affected the decision,Conflict of Interest,colloquial-conflict-of-interest-03,English,Meru
+Anasema mwenyekiti ana hisa kwa zabuni iliyoshinda.,Conflict of Interest,colloquial-conflict-of-interest-03,Sheng,Kitui
+maslahi yasiyotangazwa yaliathiri uamuzi,Conflict of Interest,colloquial-conflict-of-interest-03,Sheng,Kilifi
+Why is his own brother working for the company he supervises?,Conflict of Interest,colloquial-conflict-of-interest-04,English,Meru
+he approved a payment to himself,Conflict of Interest,colloquial-conflict-of-interest-04,English,Kitui
+Kwa nini ndugu yake anafanya kazi kwa kampuni anayoisimamia?,Conflict of Interest,colloquial-conflict-of-interest-04,Sheng,Kilifi
+aliidhinisha malipo kwake mwenyewe,Conflict of Interest,colloquial-conflict-of-interest-04,Sheng,Bungoma
+The officer signed for land next to his own plot.,Conflict of Interest,colloquial-conflict-of-interest-05,English,Kitui
+a financial interest was never disclosed,Conflict of Interest,colloquial-conflict-of-interest-05,English,Kilifi
+Afisa alitia sahihi ardhi jirani na yake.,Conflict of Interest,colloquial-conflict-of-interest-05,Sheng,Bungoma
+maslahi ya kifedha hayakutangazwa,Conflict of Interest,colloquial-conflict-of-interest-05,Sheng,Nairobi
+manager approved his wifes company,Conflict of Interest,colloquial-conflict-of-interest-06,English,Kilifi
+family interest in the contract,Conflict of Interest,colloquial-conflict-of-interest-06,English,Bungoma
+meneja aliidhinisha kampuni ya mkewe,Conflict of Interest,colloquial-conflict-of-interest-06,Sheng,Nairobi
+maslahi ya familia kwenye mkataba,Conflict of Interest,colloquial-conflict-of-interest-06,Sheng,Mombasa
+The office sells public forms at three times the printed price.,Other,colloquial-other-01,English,Mombasa
+they charge for a service that should be free,Other,colloquial-other-01,English,Kisumu
+Ofisi inauza fomu kwa bei mara tatu.,Other,colloquial-other-01,Sheng,Nakuru
+wanatoza huduma ambayo ni bure,Other,colloquial-other-01,Sheng,Meru
+staff keep our files n refuse to return them,Other,colloquial-other-02,English,Kisumu
+the queue is moved only for those who know someone,Other,colloquial-other-02,English,Nakuru
+wafanyakazi wanashikilia faili zetu,Other,colloquial-other-02,Sheng,Meru
+foleni inasogea kwa wanaojuana tu,Other,colloquial-other-02,Sheng,Kitui
+Says the office closed early for three weeks with no notice.,Other,colloquial-other-03,English,Nakuru
+nobody answers the phone or the counter,Other,colloquial-other-03,English,Meru
+Anasema ofisi ilifungwa wiki tatu bila taarifa.,Other,colloquial-other-03,Sheng,Kitui
+hakuna anayejibu simu wala dirisha,Other,colloquial-other-03,Sheng,Kilifi
+Why are we sent from one office to another for the same paper?,Other,colloquial-other-04,English,Meru
+nobody will say who is responsible,Other,colloquial-other-04,English,Kitui
+Kwa nini tunapelekwa ofisi moja hadi nyingine?,Other,colloquial-other-04,Sheng,Kilifi
+hakuna anayesema nani mhusika,Other,colloquial-other-04,Sheng,Bungoma
+The public notice was changed after people complained.,Other,colloquial-other-05,English,Kitui
+the rules keep changing without explanation,Other,colloquial-other-05,English,Kilifi
+Taarifa ya umma ilibadilishwa baada ya malalamiko.,Other,colloquial-other-05,Sheng,Bungoma
+sheria zinabadilika bila maelezo,Other,colloquial-other-05,Sheng,Nairobi
+water point closed for months no reason,Other,colloquial-other-06,English,Kilifi
+promised road never built no explanation,Other,colloquial-other-06,English,Bungoma
+kituo cha maji kimefungwa miezi hakuna sababu,Other,colloquial-other-06,Sheng,Nairobi
+barabara iliyoahidiwa haikujengwa,Other,colloquial-other-06,Sheng,Mombasa
