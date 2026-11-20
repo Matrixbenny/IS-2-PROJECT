@@ -313,6 +313,9 @@ def main() -> int:
             metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
             if metadata.get("status") == "synthetic_only_not_for_real_world_validation_or_production_training":
                 data_status = metadata["status"]
+            elif metadata.get("status") == "adjudicated_real_reports" and metadata.get("approval_reference"):
+                # Real, double-labelled reports exported under a recorded approval (see README).
+                data_status = metadata["status"]
         evaluation = train(
             rows,
             Path(__file__).resolve().parents[1] / "artifacts",
